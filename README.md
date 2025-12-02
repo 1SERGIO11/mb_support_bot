@@ -6,8 +6,10 @@ Features:
 - Run as many bots as you want in one process. Each bot has its own settings and database
 - Separate topic in the admin group for each user who writes to the bot
 - Simple bot menu builder using `toml` file
+- Menu answers stay in one message by default (keyboard remains pinned)
 - Optional message self-destruction on the user's side, triggered by a timer
 - Admins can broadcast a message to all the users directly from the admin group
+- Optional quick-reply keyboard for admins inside topics (configure `admin_replies.toml`)
 - Optional archiving of all the messages to a Google Sheet
 - Reporting of bot statistics once a week in the admin group
 

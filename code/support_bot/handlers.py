@@ -3,11 +3,13 @@ from aiogram import Dispatcher
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 
+from . import buttons
 from .admin_actions import BroadcastForm, admin_broadcast_ask_confirm, admin_broadcast_finish
 from .buttons import admin_btn_handler, send_new_msg_with_keyboard, user_btn_handler
 from .informing import handle_error, log, save_admin_message, save_user_message
 from .filters import (
-    ACommandFilter, BtnInAdminGroup, BtnInPrivateChat, BotMention, InAdminGroup,
+    ACommandFilter, BtnInAdminGroup, BtnInAdminTopic, BtnInPrivateChat, BotMention,
+    InAdminGroup, InAdminTopic,
     GroupChatCreatedFilter, NewChatMembersFilter, PrivateChatFilter,
     ReplyToBotInGroupForwardedFilter,
 )
@@ -60,7 +62,26 @@ async def _new_topic(msg: agtypes.Message, tguser=None) -> int:
     text += '\n\n<i>Replies to any bot message in this topic will be sent to the user</i>'
 
     await bot.send_message(group_id, text, message_thread_id=thread_id)
+    await _send_quick_replies(bot, thread_id)
     return thread_id
+
+
+async def _send_quick_replies(bot, thread_id: int) -> None:
+    """
+    Drop a quick-reply keyboard into the topic if configured
+    """
+
+    if not bot.admin_quick_replies:
+        return
+
+    text = '⚡ Быстрые ответы для оператора'
+    await send_new_msg_with_keyboard(
+        bot,
+        bot.cfg['admin_group_id'],
+        text,
+        bot.admin_quick_replies,
+        message_thread_id=thread_id,
+    )
 
 
 @log
@@ -152,6 +173,57 @@ async def mention_in_admin_group(msg: agtypes.Message, *args, **kwargs):
     await send_new_msg_with_keyboard(bot, group.id, 'Choose:', bot.admin_menu)
 
 
+@log
+@handle_error
+async def admin_quick_reply_handler(call: agtypes.CallbackQuery, *args, **kwargs):
+    """
+    Handle quick-reply buttons inside admin topics
+    """
+    msg = call.message
+    bot = msg.bot
+    cbd = buttons.CBD.unpack(call.data)
+
+    if not bot.admin_quick_replies:
+        return await call.answer('Нет быстрых ответов в admin_replies.toml', show_alert=True)
+
+    tguser = await bot.db.tguser.get(thread_id=msg.message_thread_id)
+    if not tguser:
+        return await call.answer('Не удалось найти пользователя для этой темы', show_alert=True)
+
+    menuitem, _ = buttons._find_menu_item(bot.admin_quick_replies, cbd)
+    btn = buttons._create_button(menuitem) if menuitem else None
+    if not btn:
+        return await call.answer('Ответ не найден', show_alert=True)
+
+    sent_to_user = await bot.send_message(tguser.user_id, btn.answer)
+    await msg.answer(f"➡️ Отправлено пользователю:\n{btn.answer}")
+
+    await save_admin_message(sent_to_user, tguser)
+    await save_for_destruction(sent_to_user, bot, chat_id=tguser.user_id)
+    return await call.answer('Сообщение отправлено')
+
+
+@log
+@handle_error
+async def show_quick_replies(msg: agtypes.Message, *args, **kwargs):
+    """
+    Show quick replies in the current admin topic
+    """
+    bot = msg.bot
+
+    if not bot.admin_quick_replies:
+        return await msg.answer('⚠️ Быстрые ответы не настроены (admin_replies.toml)')
+
+    text = '⚡ Быстрые ответы для оператора'
+    await send_new_msg_with_keyboard(
+        bot,
+        msg.chat.id,
+        text,
+        bot.admin_quick_replies,
+        message_thread_id=msg.message_thread_id,
+    )
+
+
 def register_handlers(dp: Dispatcher) -> None:
     """
     Register all the handlers to the provided dispatcher
@@ -159,6 +231,7 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.message.register(user_message, PrivateChatFilter(), ~ACommandFilter())
     dp.message.register(admin_message, ~ACommandFilter(), ReplyToBotInGroupForwardedFilter())
     dp.message.register(cmd_start, PrivateChatFilter(), Command('start'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
     dp.message.register(added_to_group, NewChatMembersFilter())
     dp.message.register(group_chat_created, GroupChatCreatedFilter())
@@ -167,5 +240,6 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.message.register(admin_broadcast_ask_confirm, BroadcastForm.message)
     dp.callback_query.register(admin_broadcast_finish, BroadcastForm.confirm, BtnInAdminGroup())
 
+    dp.callback_query.register(admin_quick_reply_handler, BtnInAdminTopic())
     dp.callback_query.register(user_btn_handler, BtnInPrivateChat())
     dp.callback_query.register(admin_btn_handler, BtnInAdminGroup())

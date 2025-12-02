@@ -25,11 +25,21 @@ Example (a line in `.env` file):
 ## Setting up bot menu
 
 To setup a user menu for your bot, create a file `shared/{BOTNAME}/menu.toml`. See example of it's content in `menu.example.toml` file. There are 5 button modes currently supported:
-- answer: just a text answer
+- answer: just a text answer (by default, the bot **edits** the same menu message to keep the keyboard pinned; set `as_new_message = true` inside the button to send a separate reply)
 - file: send a file to the user
 - link: open an external link
 - menu: open a submenu
 - subject: allows users to choose subject they are willing to discuss. Useful for statistics.
+
+### Quick replies for admins
+
+Add an optional file `shared/{BOTNAME}/admin_replies.toml` to show a “⚡ Быстрые ответы” panel in every new user topic (or via `/quick` inside a topic). Each entry has `label` (button text) and `answer` (what will be sent to the user). Example:
+
+```
+[ack]
+label = "✅ Приняли обращение"
+answer = "Мы получили ваше сообщение и отвечаем в течение нескольких минут."
+```
 
 ## How To
 
