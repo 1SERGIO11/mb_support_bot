@@ -151,7 +151,22 @@ async def user_btn_handler(call: agtypes.CallbackQuery, *args, **kwargs):
         elif btn.mode == ButtonMode.file:
             sentmsg = await send_file(bot, chat.id, menuitem)
         elif btn.mode == ButtonMode.answer:
-            sentmsg = await msg.answer(btn.answer)
+            if menuitem.get('start_chat'):
+                if tguser := await bot.db.tguser.get(user=chat):
+                    await bot.db.tguser.update(chat.id, can_message=True)
+                else:
+                    await bot.db.tguser.add(chat, msg, first_replied=False, can_message=True)
+            if menuitem.get('as_new_message'):
+                sentmsg = await msg.answer(btn.answer)
+            else:
+                await bot.edit_message_text(
+                    chat_id=chat.id,
+                    message_id=msg.message_id,
+                    text=btn.answer,
+                    reply_markup=msg.reply_markup,
+                    disable_web_page_preview=True,
+                )
+                sentmsg = None
         elif btn.mode == ButtonMode.subject:
             sentmsg = await set_subject(bot, chat, menuitem)
 
@@ -210,7 +225,8 @@ async def set_subject(bot, user: agtypes.User, menuitem: dict) -> agtypes.Messag
 
 
 async def edit_or_send_new_msg_with_keyboard(
-        bot, chat_id: int, cbd: CallbackData, menu: dict, path: str='') -> agtypes.Message:
+        bot, chat_id: int, cbd: CallbackData, menu: dict, path: str='',
+        message_thread_id: int | None = None) -> agtypes.Message:
     """
     Shortcut to edit a message, or,
     if it's not possible, send a new message.
@@ -219,21 +235,34 @@ async def edit_or_send_new_msg_with_keyboard(
     try:
         markup = _get_kb_builder(menu, cbd.msgid, path).as_markup()
         return await bot.edit_message_text(chat_id=chat_id, message_id=cbd.msgid, text=text,
-                                           reply_markup=markup)
+                                           reply_markup=markup, disable_web_page_preview=True)
     except TelegramBadRequest:
-        return await send_new_msg_with_keyboard(bot, chat_id, text, menu, path)
+        return await send_new_msg_with_keyboard(
+            bot, chat_id, text, menu, path, message_thread_id=message_thread_id,
+        )
 
 
 async def send_new_msg_with_keyboard(
-        bot, chat_id: int, text: str, menu: dict | None, path: str='') -> agtypes.Message:
+        bot, chat_id: int, text: str, menu: dict | None, path: str='',
+        message_thread_id: int | None = None) -> agtypes.Message:
     """
     Shortcut to send a message with a keyboard.
     """
-    sentmsg = await bot.send_message(chat_id, text=text, disable_web_page_preview=True)
+    sentmsg = await bot.send_message(
+        chat_id,
+        text=text,
+        disable_web_page_preview=True,
+        message_thread_id=message_thread_id,
+    )
     if menu:
         markup = _get_kb_builder(menu, sentmsg.message_id, path).as_markup()
-        await bot.edit_message_text(chat_id=chat_id, message_id=sentmsg.message_id, text=text,
-                                    reply_markup=markup)
+        await bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=sentmsg.message_id,
+            text=text,
+            reply_markup=markup,
+            disable_web_page_preview=True,
+        )
     return sentmsg
 
 
