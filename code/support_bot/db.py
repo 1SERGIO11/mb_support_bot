@@ -98,12 +98,40 @@ class SqlTgUser(SqlRepo):
     """
     Repository for TgUsers table
     """
+
+    def __init__(self, url: str):
+        super().__init__(url)
+        self._schema_checked = False
+
+    async def _ensure_can_message_column(self) -> None:
+        """Make sure older SQLite DBs have the can_message column.
+
+        Some existing installs may not have run the migration yet; to avoid
+        crashes on select/update, we lazily add the column on first access.
+        """
+        if self._schema_checked or 'sqlite' not in self.url:
+            return
+
+        async with create_async_engine(self.url).begin() as conn:
+            result = await conn.execute(sa.text('PRAGMA table_info(tgusers)'))
+            columns = {row[1] for row in result.fetchall()}
+            if 'can_message' not in columns:
+                await conn.execute(
+                    sa.text(
+                        "ALTER TABLE tgusers ADD COLUMN can_message "
+                        "BOOLEAN NOT NULL DEFAULT 0"
+                    )
+                )
+
+        self._schema_checked = True
+
     async def add(self,
                   user: agtypes.User,
                   user_msg: agtypes.Message,
                   thread_id: int | None = None,
                   first_replied: bool = False,
                   can_message: bool = False) -> DbTgUser:
+        await self._ensure_can_message_column()
         tguser = DbTgUser(
             user_id=user.id, full_name=user.full_name, username=user.username, thread_id=thread_id,
             last_user_msg_at=user_msg.date.replace(tzinfo=None), first_replied=first_replied,
@@ -118,6 +146,7 @@ class SqlTgUser(SqlRepo):
     async def get(self,
                   user: agtypes.User | None = None,
                   thread_id: int | None = None) -> SaRow | None:
+        await self._ensure_can_message_column()
         if user:
             query = sa.select(TgUsers).where(TgUsers.user_id==user.id)
         else:
@@ -136,6 +165,7 @@ class SqlTgUser(SqlRepo):
         Update TgUser fields (thread_id, subject, etc) provided as kwargs.
         if user_msg provided, set it's date to last_user_msg_at field.
         """
+        await self._ensure_can_message_column()
         if user_msg:
             kwargs['last_user_msg_at'] = user_msg.date.replace(tzinfo=None)
 
@@ -143,6 +173,7 @@ class SqlTgUser(SqlRepo):
             await conn.execute(sa.update(TgUsers).where(TgUsers.user_id==user_id).values(**kwargs))
 
     async def del_thread_id(self, user_id: int) -> None:
+        await self._ensure_can_message_column()
         async with create_async_engine(self.url).begin() as conn:
             query = sa.update(TgUsers).where(TgUsers.user_id==user_id).values(thread_id=None)
             await conn.execute(query)
