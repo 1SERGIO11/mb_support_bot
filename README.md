@@ -7,6 +7,7 @@ Features:
 - Separate topic in the admin group for each user who writes to the bot
 - Simple bot menu builder using `toml` file
 - Menu answers stay in one message by default (keyboard remains pinned)
+- Forwarding to admins is unlocked only after the user taps the “contact” button (no accidental submissions)
 - Optional message self-destruction on the user's side, triggered by a timer
 - Admins can broadcast a message to all the users directly from the admin group
 - Optional quick-reply keyboard for admins inside topics (configure `admin_replies.toml`)

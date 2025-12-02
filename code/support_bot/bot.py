@@ -22,7 +22,7 @@ class SupportBot(Bot):
     cfg_vars = (
         'admin_group_id', 'hello_msg', 'first_reply', 'db_url', 'db_engine',
         'save_messages_gsheets_cred_file', 'save_messages_gsheets_filename', 'hello_ps',
-        'destruct_user_messages_for_user', 'destruct_bot_messages_for_user'
+        'destruct_user_messages_for_user', 'destruct_bot_messages_for_user', 'contact_gate_msg'
     )
     botdir_file_cfg_vars = ('save_messages_gsheets_cred_file',)
 
@@ -48,14 +48,24 @@ class SupportBot(Bot):
         """
         cfg = {
             'name': self.name,
-            'hello_msg': 'Hello! Write your message',
+            'hello_msg': (
+                'Здравствуйте! 👋\nВы в службе поддержки Sigma VPN.\n\n'
+                '📌 Чем можем помочь:\n• Подключение и настройка\n• Медленная скорость или сайты не открываются\n'
+                '• Тарифы, оплата, промокоды\n\n'
+                'Чтобы написать оператору, нажмите «✉️ Написать оператору» в меню ниже — '
+                'после нажатия откроется чат поддержки.'
+            ),
             'first_reply': (
-                "We have received your message. We'll get back to you as soon as we can. "
-                "Please don't delete the chat so we can send you a reply."
+                '✅ Мы получили ваше сообщение и отвечаем как можно быстрее.\n'
+                'Пожалуйста, не удаляйте чат, чтобы мы смогли прислать ответ.'
             ),
             'db_url': f'sqlite+aiosqlite:///{self.botdir}/db.sqlite',
             'db_engine': 'aiosqlite',
             'hello_ps': '\n\n<i>The bot is created by @moladzbel</i>',
+            'contact_gate_msg': (
+                '✉️ Чтобы обратиться в поддержку, нажмите кнопку «Написать оператору» в меню ниже. '
+                'Сообщения попадут к оператору только после нажатия.'
+            ),
         }
         for var in self.cfg_vars:
             envvar = os.getenv(f'{self.name}_{var.upper()}')

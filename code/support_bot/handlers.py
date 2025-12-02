@@ -115,7 +115,24 @@ async def user_message(msg: agtypes.Message, *args, **kwargs) -> None:
     group_id = msg.bot.cfg['admin_group_id']
     bot, user, db = msg.bot, msg.chat, msg.bot.db
 
-    if tguser := await db.tguser.get(user=user):
+    tguser = await db.tguser.get(user=user)
+    can_message = bool(tguser and getattr(tguser, 'can_message', False))
+
+    if not can_message:
+        new_user = not bool(tguser)
+        # User must tap "contact" first — show the hint and keep the menu visible
+        gate_msg = bot.cfg.get('contact_gate_msg')
+        sentmsg = await send_new_msg_with_keyboard(bot, user.id, gate_msg, bot.menu)
+
+        if not tguser:
+            tguser = await db.tguser.add(user, msg, first_replied=False, can_message=False)
+
+        await save_user_message(msg, new_user=new_user, stat=False)
+        await save_for_destruction(msg, bot)
+        await save_for_destruction(sentmsg, bot)
+        return
+
+    if tguser:
         if thread_id := tguser.thread_id:
             try:
                 await msg.forward(group_id, message_thread_id=thread_id)
@@ -140,7 +157,7 @@ async def user_message(msg: agtypes.Message, *args, **kwargs) -> None:
         if bot.cfg['first_reply']:
             sentmsg = await bot.send_message(user.id, bot.cfg['first_reply'])
             await save_for_destruction(sentmsg, bot)
-        tguser = await db.tguser.add(user, msg, thread_id, first_replied=True)
+        tguser = await db.tguser.add(user, msg, thread_id, first_replied=True, can_message=True)
         await msg.forward(group_id, message_thread_id=thread_id)
 
     await save_user_message(msg)
