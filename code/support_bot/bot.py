@@ -34,6 +34,7 @@ class SupportBot(Bot):
         token, self.cfg = self._read_config()
         self._configure_db()
         self._load_menu()
+        self._load_quick_replies()
 
         super().__init__(token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
@@ -111,3 +112,9 @@ class SupportBot(Bot):
             AdminBtn.del_old_topics: {'label': '🧹 Delete topics older than 2 weeks',
                                       'answer': ('Deleting topics older than 2 weeks...')},
         }
+
+    def _load_quick_replies(self) -> None:
+        """
+        Load optional admin quick-reply scripts from admin_replies.toml
+        """
+        self.admin_quick_replies = load_toml(self.botdir / 'admin_replies.toml') or {}
