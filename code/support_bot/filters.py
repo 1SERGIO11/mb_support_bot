@@ -56,6 +56,16 @@ class InAdminGroup(Filter):
         return is_admin_group and not msg.message_thread_id
 
 
+class InAdminTopic(Filter):
+    """
+    Checks that a message is posted inside a topic of the admin group
+    """
+
+    async def __call__(self, msg: agtypes.Message) -> bool:
+        is_admin_group = msg.chat.id == int(msg.bot.cfg['admin_group_id'])
+        return is_admin_group and bool(msg.message_thread_id)
+
+
 class BotMention(Filter):
     """
     Checks it is a bot's mention, only
@@ -72,6 +82,16 @@ class BtnInAdminGroup(Filter):
     async def __call__(self, call: agtypes.CallbackQuery) -> bool:
         msg = call.message
         return msg.chat.id == int(msg.bot.cfg['admin_group_id'])
+
+
+class BtnInAdminTopic(Filter):
+    """
+    Checks that a callback is pressed inside a topic of the admin group
+    """
+
+    async def __call__(self, call: agtypes.CallbackQuery) -> bool:
+        msg = call.message
+        return msg.chat.id == int(msg.bot.cfg['admin_group_id']) and bool(msg.message_thread_id)
 
 
 class BtnInPrivateChat(Filter):

@@ -29,6 +29,7 @@ class TgUsers(Base):
     subject = sa.Column(sa.String(32))
     banned = sa.Column(sa.Boolean, default=False, nullable=False)
     first_replied = sa.Column(sa.Boolean, server_default=false(), nullable=False)
+    can_message = sa.Column(sa.Boolean, server_default=false(), nullable=False)
 
 
 class ActionStats(Base):
@@ -71,6 +72,7 @@ class DbTgUser:
     subject: str = None
     banned: bool = False
     first_replied: bool = False  # whether first_reply has been sent or not
+    can_message: bool = False
 
 
 class SqlDb:
@@ -100,10 +102,12 @@ class SqlTgUser(SqlRepo):
                   user: agtypes.User,
                   user_msg: agtypes.Message,
                   thread_id: int | None = None,
-                  first_replied: bool = False) -> DbTgUser:
+                  first_replied: bool = False,
+                  can_message: bool = False) -> DbTgUser:
         tguser = DbTgUser(
             user_id=user.id, full_name=user.full_name, username=user.username, thread_id=thread_id,
             last_user_msg_at=user_msg.date.replace(tzinfo=None), first_replied=first_replied,
+            can_message=can_message,
         )
         async with create_async_engine(self.url).begin() as conn:
             await conn.execute(sa.delete(TgUsers).filter_by(user_id=user.id))
