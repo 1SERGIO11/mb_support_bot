@@ -153,7 +153,8 @@ async def user_btn_handler(call: agtypes.CallbackQuery, *args, **kwargs):
         elif btn.mode == ButtonMode.answer:
             if menuitem.get('start_chat'):
                 if tguser := await bot.db.tguser.get(user=chat):
-                    await bot.db.tguser.update(chat.id, can_message=True)
+                    # Reset the flag so the user gets the first auto-reply again
+                    await bot.db.tguser.update(chat.id, can_message=True, first_replied=False)
                 else:
                     await bot.db.tguser.add(chat, msg, first_replied=False, can_message=True)
             if menuitem.get('as_new_message'):
