@@ -7,6 +7,8 @@ The following variables are available in `.env` file:
 - `{BOTNAME}_HELLO_MSG` - Optional. A welcome message to a new user. This and other messages (`{BOTNAME}_HELLO_PS`, `{BOTNAME}_FIRST_REPLY`) can use all the HTML tags supported by Telegram for styling: see *Styling messages* section below.
 - `{BOTNAME}_HELLO_PS` - Optional. A P.S. in hello message. Default is "The bot is created by @moladzbel".
 - `{BOTNAME}_FIRST_REPLY` - Optional. Text of an automatic reply to the first meaningful user mesasge (not the /start) sent to the bot.
+- `{BOTNAME}_CONTACT_GATE_MSG` - Optional. A hint shown if the user tries to write before pressing the “contact” button. Messages are forwarded to admins **only after** the user taps a button with `start_chat = true` in `menu.toml`.
+- `{BOTNAME}_CONTACT_UNLOCKED_MSG` - Optional. A prompt sent right after the user presses the contact button to confirm that messaging is unlocked and to remind what details to include.
 - `{BOTNAME}_DB_URL` - Optional. Database URL if you want to use something other than SQLite in `shared/`.
 - `{BOTNAME}_DB_ENGINE` - Optional. Database library to use. Only `aiosqlite` is currently supported.
 - `{BOTNAME}_SAVE_MESSAGES_GSHEETS_CRED_FILE` - Optional. Google Service Account credentials file. If set, all the income and outcome bot messages are being saved to Google Sheets. See the setup steps in "How To" below.
@@ -25,11 +27,23 @@ Example (a line in `.env` file):
 ## Setting up bot menu
 
 To setup a user menu for your bot, create a file `shared/{BOTNAME}/menu.toml`. See example of it's content in `menu.example.toml` file. There are 5 button modes currently supported:
-- answer: just a text answer
+- answer: just a text answer (by default, the bot **edits** the same menu message to keep the keyboard pinned; set `as_new_message = true` inside the button to send a separate reply)
 - file: send a file to the user
 - link: open an external link
 - menu: open a submenu
 - subject: allows users to choose subject they are willing to discuss. Useful for statistics.
+
+If you want to unlock forwarding to admins only after a user taps a specific button, add `start_chat = true` to that button (usually “✉️ Написать оператору”). Until that happens, incoming user messages stay in the chat and the bot shows `{BOTNAME}_CONTACT_GATE_MSG` instead of forwarding them.
+
+### Quick replies for admins
+
+Add an optional file `shared/{BOTNAME}/admin_replies.toml` to show a “⚡ Быстрые ответы” panel in every new user topic (or via `/quick` inside a topic). Each entry has `label` (button text) and `answer` (what will be sent to the user). Example:
+
+```
+[ack]
+label = "✅ Приняли обращение"
+answer = "Мы получили ваше сообщение и отвечаем в течение нескольких минут."
+```
 
 ## How To
 
