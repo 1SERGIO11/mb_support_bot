@@ -22,7 +22,8 @@ class SupportBot(Bot):
     cfg_vars = (
         'admin_group_id', 'hello_msg', 'first_reply', 'db_url', 'db_engine',
         'save_messages_gsheets_cred_file', 'save_messages_gsheets_filename', 'hello_ps',
-        'destruct_user_messages_for_user', 'destruct_bot_messages_for_user', 'contact_gate_msg'
+        'destruct_user_messages_for_user', 'destruct_bot_messages_for_user', 'contact_gate_msg',
+        'contact_unlocked_msg'
     )
     botdir_file_cfg_vars = ('save_messages_gsheets_cred_file',)
 
@@ -65,6 +66,15 @@ class SupportBot(Bot):
             'contact_gate_msg': (
                 '✉️ Чтобы обратиться в поддержку, нажмите кнопку «Написать оператору» в меню ниже. '
                 'Сообщения попадут к оператору только после нажатия.'
+            ),
+            'contact_unlocked_msg': (
+                '✉️ Чат поддержки открыт.\n\n'
+                '<b>Опишите проблему одним сообщением и добавьте:</b>\n'
+                '1. Вашу ОС\n'
+                '2. Приложение для подключения\n'
+                '3. Серверы, к которым пробовали подключиться\n'
+                '4. Регион и оператора\n\n'
+                'Это поможет быстрее разобраться и решить вашу проблему.'
             ),
         }
         for var in self.cfg_vars:

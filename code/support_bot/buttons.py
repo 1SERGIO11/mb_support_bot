@@ -141,6 +141,7 @@ async def user_btn_handler(call: agtypes.CallbackQuery, *args, **kwargs):
     cbd = CBD.unpack(call.data)
     menuitem, path = _find_menu_item(bot.menu, cbd)
     sentmsg = None
+    unlocked_prompt = None
 
     if not cbd.path and not cbd.code:  # main menu
         sentmsg = await edit_or_send_new_msg_with_keyboard(bot, chat.id, cbd, bot.menu)
@@ -151,12 +152,16 @@ async def user_btn_handler(call: agtypes.CallbackQuery, *args, **kwargs):
         elif btn.mode == ButtonMode.file:
             sentmsg = await send_file(bot, chat.id, menuitem)
         elif btn.mode == ButtonMode.answer:
+            unlocked_prompt = None
             if menuitem.get('start_chat'):
                 if tguser := await bot.db.tguser.get(user=chat):
                     # Reset the flag so the user gets the first auto-reply again
                     await bot.db.tguser.update(chat.id, can_message=True, first_replied=False)
                 else:
                     await bot.db.tguser.add(chat, msg, first_replied=False, can_message=True)
+                unlocked_text = bot.cfg.get('contact_unlocked_msg')
+                if unlocked_text:
+                    unlocked_prompt = await msg.answer(unlocked_text)
             if menuitem.get('as_new_message'):
                 sentmsg = await msg.answer(btn.answer)
             else:
@@ -172,6 +177,7 @@ async def user_btn_handler(call: agtypes.CallbackQuery, *args, **kwargs):
             sentmsg = await set_subject(bot, chat, menuitem)
 
     await save_for_destruction(sentmsg, bot)
+    await save_for_destruction(unlocked_prompt, bot)
 
     return await call.answer()
 

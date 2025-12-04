@@ -8,6 +8,7 @@ The following variables are available in `.env` file:
 - `{BOTNAME}_HELLO_PS` - Optional. A P.S. in hello message. Default is "The bot is created by @moladzbel".
 - `{BOTNAME}_FIRST_REPLY` - Optional. Text of an automatic reply to the first meaningful user mesasge (not the /start) sent to the bot.
 - `{BOTNAME}_CONTACT_GATE_MSG` - Optional. A hint shown if the user tries to write before pressing the “contact” button. Messages are forwarded to admins **only after** the user taps a button with `start_chat = true` in `menu.toml`.
+- `{BOTNAME}_CONTACT_UNLOCKED_MSG` - Optional. A prompt sent right after the user presses the contact button to confirm that messaging is unlocked and to remind what details to include (by default asks про ОС, приложение, сервер и регион/оператора).
 - `{BOTNAME}_DB_URL` - Optional. Database URL if you want to use something other than SQLite in `shared/`.
 - `{BOTNAME}_DB_ENGINE` - Optional. Database library to use. Only `aiosqlite` is currently supported.
 - `{BOTNAME}_SAVE_MESSAGES_GSHEETS_CRED_FILE` - Optional. Google Service Account credentials file. If set, all the income and outcome bot messages are being saved to Google Sheets. See the setup steps in "How To" below.
