@@ -23,7 +23,7 @@ class SupportBot(Bot):
         'admin_group_id', 'hello_msg', 'first_reply', 'db_url', 'db_engine',
         'save_messages_gsheets_cred_file', 'save_messages_gsheets_filename', 'hello_ps',
         'destruct_user_messages_for_user', 'destruct_bot_messages_for_user', 'contact_gate_msg',
-        'contact_unlocked_msg'
+        'contact_unlocked_msg', 'stats_topic_id', 'stats_topic_name'
     )
     botdir_file_cfg_vars = ('save_messages_gsheets_cred_file',)
 
@@ -76,10 +76,15 @@ class SupportBot(Bot):
                 '4. Регион и оператора\n\n'
                 'Это поможет быстрее разобраться и решить вашу проблему.'
             ),
+            'stats_topic_name': 'Еженедельная статистика',
         }
+        stats_file = self.botdir / 'stats_topic_id.txt'
+        if stats_file.exists():
+            cfg['stats_topic_id'] = stats_file.read_text().strip()
+
         for var in self.cfg_vars:
             envvar = os.getenv(f'{self.name}_{var.upper()}')
-            if envvar is not None:
+            if envvar not in (None, ''):
                 cfg[var] = envvar
 
         # convert vars with filenames to actual pathes
@@ -93,6 +98,9 @@ class SupportBot(Bot):
                 cfg[var] = int(cfg[var])
                 if not 1 <= cfg[var] <= 47:
                     raise ValueError(f'{var} must be between 1 and 47 (hours)')
+
+        if stats_topic_id := cfg.get('stats_topic_id'):
+            cfg['stats_topic_id'] = int(stats_topic_id)
 
         cfg['hello_msg'] += cfg['hello_ps']
         return os.getenv(f'{self.name}_TOKEN'), cfg
@@ -138,3 +146,25 @@ class SupportBot(Bot):
         Load optional admin quick-reply scripts from admin_replies.toml
         """
         self.admin_quick_replies = load_toml(self.botdir / 'admin_replies.toml') or {}
+
+    async def ensure_stats_topic(self) -> int:
+        """Ensure a dedicated stats topic exists and persist its ID.
+
+        If the ID is provided via env/file we reuse it. Otherwise, we create a
+        new topic once and store its thread id under shared/{BOT}/stats_topic_id.txt
+        for future runs.
+        """
+
+        if thread_id := self.cfg.get('stats_topic_id'):
+            return int(thread_id)
+
+        response = await self.create_forum_topic(
+            self.cfg['admin_group_id'], self.cfg.get('stats_topic_name', 'Еженедельная статистика'),
+        )
+        thread_id = response.message_thread_id
+
+        path = self.botdir / 'stats_topic_id.txt'
+        path.write_text(str(thread_id))
+        self.cfg['stats_topic_id'] = thread_id
+        await self.log(f'Created stats topic {thread_id} and saved to {path}')
+        return thread_id

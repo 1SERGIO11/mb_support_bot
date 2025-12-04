@@ -113,6 +113,7 @@ async def stats_to_admin_chat(bots: list) -> None:
     from_date = datetime.date.today() - datetime.timedelta(days=7)
 
     for bot in bots:
+        thread_id = await bot.ensure_stats_topic()
         msg = '<b>In the past week</b>\n'
         if results := await bot.db.action.get_grouped(from_date):
             msg += '\n'.join([f'- {r[0].value[1]}s: {r[1]}' for r in results]) + '\n'
@@ -126,4 +127,4 @@ async def stats_to_admin_chat(bots: list) -> None:
             msg += '- Nothing yet\n'
 
         msg += '\n#stats'
-        await bot.send_message(bot.cfg['admin_group_id'], msg)
+        await bot.send_message(bot.cfg['admin_group_id'], msg, message_thread_id=thread_id)
