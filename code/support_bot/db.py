@@ -29,6 +29,7 @@ class TgUsers(Base):
     subject = sa.Column(sa.String(32))
     banned = sa.Column(sa.Boolean, default=False, nullable=False)
     first_replied = sa.Column(sa.Boolean, server_default=false(), nullable=False)
+    can_message = sa.Column(sa.Boolean, server_default=false(), nullable=False)
 
 
 class ActionStats(Base):
@@ -58,6 +59,21 @@ class MessagesToDelete(Base):
     )
 
 
+class MirroredMessages(Base):
+    __tablename__ = 'mirrored_messages'
+
+    id = sa.Column(sa.Integer, primary_key=True)
+    admin_chat_id = sa.Column(sa.Integer, nullable=False)
+    admin_msg_id = sa.Column(sa.Integer, nullable=False)
+    user_chat_id = sa.Column(sa.Integer, nullable=False)
+    user_msg_id = sa.Column(sa.Integer, nullable=False)
+    thread_id = sa.Column(sa.Integer, nullable=True)
+
+    __table_args__ = (
+        sa.UniqueConstraint('admin_chat_id', 'admin_msg_id'),
+    )
+
+
 @dataclass
 class DbTgUser:
     """
@@ -71,6 +87,7 @@ class DbTgUser:
     subject: str = None
     banned: bool = False
     first_replied: bool = False  # whether first_reply has been sent or not
+    can_message: bool = False
 
 
 class SqlDb:
@@ -82,6 +99,7 @@ class SqlDb:
         self.tguser = SqlTgUser(url)
         self.action = SqlAction(url)
         self.msgtodel = SqlMessageToDelete(url)
+        self.msgmirror = SqlMirroredMessages(url)
 
 
 class SqlRepo:
@@ -96,14 +114,44 @@ class SqlTgUser(SqlRepo):
     """
     Repository for TgUsers table
     """
+
+    def __init__(self, url: str):
+        super().__init__(url)
+        self._schema_checked = False
+
+    async def _ensure_can_message_column(self) -> None:
+        """Make sure older SQLite DBs have the can_message column.
+
+        Some existing installs may not have run the migration yet; to avoid
+        crashes on select/update, we lazily add the column on first access.
+        """
+        if self._schema_checked or 'sqlite' not in self.url:
+            return
+
+        async with create_async_engine(self.url).begin() as conn:
+            result = await conn.execute(sa.text('PRAGMA table_info(tgusers)'))
+            columns = {row[1] for row in result.fetchall()}
+            if 'can_message' not in columns:
+                await conn.execute(
+                    sa.text(
+                        "ALTER TABLE tgusers ADD COLUMN can_message "
+                        "BOOLEAN NOT NULL DEFAULT 0"
+                    )
+                )
+
+        self._schema_checked = True
+
     async def add(self,
                   user: agtypes.User,
                   user_msg: agtypes.Message,
                   thread_id: int | None = None,
-                  first_replied: bool = False) -> DbTgUser:
+                  first_replied: bool = False,
+                  can_message: bool = False) -> DbTgUser:
+        await self._ensure_can_message_column()
         tguser = DbTgUser(
             user_id=user.id, full_name=user.full_name, username=user.username, thread_id=thread_id,
             last_user_msg_at=user_msg.date.replace(tzinfo=None), first_replied=first_replied,
+            can_message=can_message,
         )
         async with create_async_engine(self.url).begin() as conn:
             await conn.execute(sa.delete(TgUsers).filter_by(user_id=user.id))
@@ -114,6 +162,7 @@ class SqlTgUser(SqlRepo):
     async def get(self,
                   user: agtypes.User | None = None,
                   thread_id: int | None = None) -> SaRow | None:
+        await self._ensure_can_message_column()
         if user:
             query = sa.select(TgUsers).where(TgUsers.user_id==user.id)
         else:
@@ -132,6 +181,7 @@ class SqlTgUser(SqlRepo):
         Update TgUser fields (thread_id, subject, etc) provided as kwargs.
         if user_msg provided, set it's date to last_user_msg_at field.
         """
+        await self._ensure_can_message_column()
         if user_msg:
             kwargs['last_user_msg_at'] = user_msg.date.replace(tzinfo=None)
 
@@ -139,6 +189,7 @@ class SqlTgUser(SqlRepo):
             await conn.execute(sa.update(TgUsers).where(TgUsers.user_id==user_id).values(**kwargs))
 
     async def del_thread_id(self, user_id: int) -> None:
+        await self._ensure_can_message_column()
         async with create_async_engine(self.url).begin() as conn:
             query = sa.update(TgUsers).where(TgUsers.user_id==user_id).values(thread_id=None)
             await conn.execute(query)
@@ -232,6 +283,91 @@ class SqlMessageToDelete(SqlRepo):
                 (MessagesToDelete.sent_at <= before) & (MessagesToDelete.by_bot == by_bot))
             result = await conn.execute(query)
             return result.fetchall()
+
+
+class SqlMirroredMessages(SqlRepo):
+    """Repository for mirrored admin→user messages."""
+
+    def __init__(self, url: str):
+        super().__init__(url)
+        self._table_ready = False
+
+    async def _ensure_table(self) -> None:
+        if self._table_ready:
+            return
+
+        async with create_async_engine(self.url).begin() as conn:
+            await conn.execute(
+                sa.text(
+                    """
+                    CREATE TABLE IF NOT EXISTS mirrored_messages (
+                        id INTEGER PRIMARY KEY,
+                        admin_chat_id INTEGER NOT NULL,
+                        admin_msg_id INTEGER NOT NULL,
+                        user_chat_id INTEGER NOT NULL,
+                        user_msg_id INTEGER NOT NULL,
+                        thread_id INTEGER,
+                        UNIQUE(admin_chat_id, admin_msg_id)
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                sa.text(
+                    "CREATE INDEX IF NOT EXISTS idx_mirrors_user ON mirrored_messages(user_chat_id, user_msg_id)"
+                )
+            )
+
+        self._table_ready = True
+
+    async def add(
+        self,
+        admin_chat_id: int,
+        admin_msg_id: int,
+        user_chat_id: int,
+        user_msg_id: int,
+        thread_id: int | None,
+    ) -> None:
+        await self._ensure_table()
+        async with create_async_engine(self.url).begin() as conn:
+            await conn.execute(
+                sa.text(
+                    """
+                    INSERT OR REPLACE INTO mirrored_messages
+                    (admin_chat_id, admin_msg_id, user_chat_id, user_msg_id, thread_id)
+                    VALUES (:admin_chat_id, :admin_msg_id, :user_chat_id, :user_msg_id, :thread_id)
+                    """
+                ),
+                {
+                    "admin_chat_id": admin_chat_id,
+                    "admin_msg_id": admin_msg_id,
+                    "user_chat_id": user_chat_id,
+                    "user_msg_id": user_msg_id,
+                    "thread_id": thread_id,
+                },
+            )
+
+    async def get(self, admin_chat_id: int, admin_msg_id: int) -> sa.Row | None:
+        await self._ensure_table()
+        async with create_async_engine(self.url).begin() as conn:
+            result = await conn.execute(
+                sa.text(
+                    "SELECT admin_chat_id, admin_msg_id, user_chat_id, user_msg_id, thread_id "
+                    "FROM mirrored_messages WHERE admin_chat_id = :admin_chat_id AND admin_msg_id = :admin_msg_id"
+                ),
+                {"admin_chat_id": admin_chat_id, "admin_msg_id": admin_msg_id},
+            )
+            return result.fetchone()
+
+    async def delete(self, admin_chat_id: int, admin_msg_id: int) -> None:
+        await self._ensure_table()
+        async with create_async_engine(self.url).begin() as conn:
+            await conn.execute(
+                sa.text(
+                    "DELETE FROM mirrored_messages WHERE admin_chat_id = :admin_chat_id AND admin_msg_id = :admin_msg_id"
+                ),
+                {"admin_chat_id": admin_chat_id, "admin_msg_id": admin_msg_id},
+            )
 
     async def remove(self, msgs: list[SaRow]) -> None:
         """
