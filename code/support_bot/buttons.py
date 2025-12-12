@@ -159,6 +159,30 @@ async def edit_or_send_new_msg_with_keyboard(
         )
 
 
+async def send_new_msg_with_keyboard(
+        bot, chat_id: int, text: str, menu: dict | None, path: str='',
+        message_thread_id: int | None = None) -> agtypes.Message:
+    """
+    Shortcut to send a message with a keyboard.
+    """
+    sentmsg = await bot.send_message(
+        chat_id,
+        text=text,
+        disable_web_page_preview=True,
+        message_thread_id=message_thread_id,
+    )
+    if menu:
+        markup = _get_kb_builder(menu, sentmsg.message_id, path).as_markup()
+        await bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=sentmsg.message_id,
+            text=text,
+            reply_markup=markup,
+            disable_web_page_preview=True,
+        )
+    return sentmsg
+
+
 def build_confirm_menu(yes_answer: str='Confirmed', no_answer: str='Canceled') -> dict:
     """
     Shortcut to build typical confirmation keyboard

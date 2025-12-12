@@ -59,6 +59,21 @@ class MessagesToDelete(Base):
     )
 
 
+class MirroredMessages(Base):
+    __tablename__ = 'mirrored_messages'
+
+    id = sa.Column(sa.Integer, primary_key=True)
+    admin_chat_id = sa.Column(sa.Integer, nullable=False)
+    admin_msg_id = sa.Column(sa.Integer, nullable=False)
+    user_chat_id = sa.Column(sa.Integer, nullable=False)
+    user_msg_id = sa.Column(sa.Integer, nullable=False)
+    thread_id = sa.Column(sa.Integer, nullable=True)
+
+    __table_args__ = (
+        sa.UniqueConstraint('admin_chat_id', 'admin_msg_id'),
+    )
+
+
 @dataclass
 class DbTgUser:
     """
@@ -84,6 +99,7 @@ class SqlDb:
         self.tguser = SqlTgUser(url)
         self.action = SqlAction(url)
         self.msgtodel = SqlMessageToDelete(url)
+        self.msgmirror = SqlMirroredMessages(url)
 
 
 class SqlRepo:
@@ -267,6 +283,91 @@ class SqlMessageToDelete(SqlRepo):
                 (MessagesToDelete.sent_at <= before) & (MessagesToDelete.by_bot == by_bot))
             result = await conn.execute(query)
             return result.fetchall()
+
+
+class SqlMirroredMessages(SqlRepo):
+    """Repository for mirrored admin→user messages."""
+
+    def __init__(self, url: str):
+        super().__init__(url)
+        self._table_ready = False
+
+    async def _ensure_table(self) -> None:
+        if self._table_ready:
+            return
+
+        async with create_async_engine(self.url).begin() as conn:
+            await conn.execute(
+                sa.text(
+                    """
+                    CREATE TABLE IF NOT EXISTS mirrored_messages (
+                        id INTEGER PRIMARY KEY,
+                        admin_chat_id INTEGER NOT NULL,
+                        admin_msg_id INTEGER NOT NULL,
+                        user_chat_id INTEGER NOT NULL,
+                        user_msg_id INTEGER NOT NULL,
+                        thread_id INTEGER,
+                        UNIQUE(admin_chat_id, admin_msg_id)
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                sa.text(
+                    "CREATE INDEX IF NOT EXISTS idx_mirrors_user ON mirrored_messages(user_chat_id, user_msg_id)"
+                )
+            )
+
+        self._table_ready = True
+
+    async def add(
+        self,
+        admin_chat_id: int,
+        admin_msg_id: int,
+        user_chat_id: int,
+        user_msg_id: int,
+        thread_id: int | None,
+    ) -> None:
+        await self._ensure_table()
+        async with create_async_engine(self.url).begin() as conn:
+            await conn.execute(
+                sa.text(
+                    """
+                    INSERT OR REPLACE INTO mirrored_messages
+                    (admin_chat_id, admin_msg_id, user_chat_id, user_msg_id, thread_id)
+                    VALUES (:admin_chat_id, :admin_msg_id, :user_chat_id, :user_msg_id, :thread_id)
+                    """
+                ),
+                {
+                    "admin_chat_id": admin_chat_id,
+                    "admin_msg_id": admin_msg_id,
+                    "user_chat_id": user_chat_id,
+                    "user_msg_id": user_msg_id,
+                    "thread_id": thread_id,
+                },
+            )
+
+    async def get(self, admin_chat_id: int, admin_msg_id: int) -> sa.Row | None:
+        await self._ensure_table()
+        async with create_async_engine(self.url).begin() as conn:
+            result = await conn.execute(
+                sa.text(
+                    "SELECT admin_chat_id, admin_msg_id, user_chat_id, user_msg_id, thread_id "
+                    "FROM mirrored_messages WHERE admin_chat_id = :admin_chat_id AND admin_msg_id = :admin_msg_id"
+                ),
+                {"admin_chat_id": admin_chat_id, "admin_msg_id": admin_msg_id},
+            )
+            return result.fetchone()
+
+    async def delete(self, admin_chat_id: int, admin_msg_id: int) -> None:
+        await self._ensure_table()
+        async with create_async_engine(self.url).begin() as conn:
+            await conn.execute(
+                sa.text(
+                    "DELETE FROM mirrored_messages WHERE admin_chat_id = :admin_chat_id AND admin_msg_id = :admin_msg_id"
+                ),
+                {"admin_chat_id": admin_chat_id, "admin_msg_id": admin_msg_id},
+            )
 
     async def remove(self, msgs: list[SaRow]) -> None:
         """
