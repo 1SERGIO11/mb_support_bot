@@ -243,10 +243,22 @@ async def admin_message_edit(msg: agtypes.Message, *args, **kwargs) -> None:
         return
 
     try:
-        if msg.text:
-            await bot.edit_message_text(msg.html_text, mapping.user_chat_id, mapping.user_msg_id)
-        elif msg.caption:
-            await bot.edit_message_caption(mapping.user_chat_id, mapping.user_msg_id, caption=msg.html_caption)
+        if msg.text is not None:
+            await bot.edit_message_text(
+                msg.text,
+                mapping.user_chat_id,
+                mapping.user_msg_id,
+                entities=msg.entities,
+                parse_mode=None,
+            )
+        elif msg.caption is not None:
+            await bot.edit_message_caption(
+                mapping.user_chat_id,
+                mapping.user_msg_id,
+                caption=msg.caption,
+                caption_entities=msg.caption_entities,
+                parse_mode=None,
+            )
     except TelegramBadRequest:
         pass
 
@@ -311,11 +323,16 @@ def register_handlers(dp: Dispatcher) -> None:
     """
     Register all the handlers to the provided dispatcher
     """
-    dp.message.register(user_message, PrivateChatFilter(), ~ACommandFilter())
+    # Commands first so /start не перехватывается как обычное сообщение
+    dp.message.register(cmd_start, PrivateChatFilter(), Command('start'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
     dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
     dp.edited_message.register(admin_message_edit, InAdminTopic())
     dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
-    dp.message.register(cmd_start, PrivateChatFilter(), Command('start'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
     dp.message.register(added_to_group, NewChatMembersFilter())
