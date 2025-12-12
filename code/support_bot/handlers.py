@@ -251,7 +251,8 @@ async def admin_message_edit(msg: agtypes.Message, *args, **kwargs) -> None:
                 entities=msg.entities,
                 parse_mode=None,
             )
-        elif msg.caption is not None:
+            return
+        if msg.caption is not None:
             await bot.edit_message_caption(
                 mapping.user_chat_id,
                 mapping.user_msg_id,
@@ -259,8 +260,26 @@ async def admin_message_edit(msg: agtypes.Message, *args, **kwargs) -> None:
                 caption_entities=msg.caption_entities,
                 parse_mode=None,
             )
+            return
     except TelegramBadRequest:
-        pass
+        # Если сообщение у пользователя не редактируется (например, Telegram не даёт
+        # изменить скопированное сообщение), заменим его новой копией и обновим
+        # зеркальную связку, чтобы дальнейшие правки продолжали работать.
+        try:
+            new_copy = await msg.copy_to(mapping.user_chat_id)
+            await db.msgmirror.add(
+                admin_chat_id=mapping.admin_chat_id,
+                admin_msg_id=mapping.admin_msg_id,
+                user_chat_id=mapping.user_chat_id,
+                user_msg_id=new_copy.message_id,
+                thread_id=mapping.thread_id,
+            )
+            try:
+                await bot.delete_message(mapping.user_chat_id, mapping.user_msg_id)
+            except TelegramBadRequest:
+                pass
+        except TelegramBadRequest:
+            pass
 
 
 @log
@@ -325,6 +344,14 @@ def register_handlers(dp: Dispatcher) -> None:
     """
     # Commands first so /start не перехватывается как обычное сообщение
     dp.message.register(cmd_start, PrivateChatFilter(), Command('start'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
     # Пользователи теперь могут писать со слешами — это не мешает операторам
