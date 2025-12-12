@@ -30,7 +30,6 @@ class ButtonMode:
     answer = 'answer'  # send an answer message
     subject = 'subject'  # set a subject matter
 
-
 class MenuMode:
     column = 'column'
     row = 'row'
