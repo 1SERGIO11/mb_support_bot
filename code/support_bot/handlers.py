@@ -12,7 +12,8 @@ from .filters import (
     InAdminGroup, InAdminTopic,
     GroupChatCreatedFilter, NewChatMembersFilter, PrivateChatFilter,
 )
-from .utils import make_user_info, save_for_destruction
+from .informing import handle_error, log, save_admin_message, save_user_message
+from .utils import save_for_destruction, _new_topic, show_quick_replies
 
 
 @log
@@ -26,8 +27,7 @@ async def cmd_start(msg: agtypes.Message, *args, **kwargs) -> None:
 
     new_user = False
     if not await db.tguser.get(user=user):  # save user if it's new
-        thread_id = await _new_topic(msg)
-        await db.tguser.add(user, msg, thread_id)
+        await db.tguser.add(user, msg)
         new_user = True
 
     await save_user_message(msg, new_user=new_user, stat=False)
