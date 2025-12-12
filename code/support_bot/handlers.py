@@ -6,14 +6,15 @@ from aiogram.filters import Command
 from . import buttons
 from .admin_actions import BroadcastForm, admin_broadcast_ask_confirm, admin_broadcast_finish
 from .buttons import admin_btn_handler, send_new_msg_with_keyboard, user_btn_handler
-from .informing import handle_error, log, save_admin_message, save_user_message
+from .db import SqlTgUser
 from .filters import (
     ACommandFilter, BtnInAdminGroup, BtnInAdminTopic, BtnInPrivateChat, BotMention,
     InAdminGroup, InAdminTopic,
     GroupChatCreatedFilter, NewChatMembersFilter, PrivateChatFilter,
     ReplyToBotInGroupForwardedFilter,
 )
-from .utils import make_user_info, save_for_destruction
+from .informing import handle_error, log, save_admin_message, save_user_message
+from .utils import save_for_destruction, _new_topic, show_quick_replies
 
 
 @log
@@ -27,8 +28,7 @@ async def cmd_start(msg: agtypes.Message, *args, **kwargs) -> None:
 
     new_user = False
     if not await db.tguser.get(user=user):  # save user if it's new
-        thread_id = await _new_topic(msg)
-        await db.tguser.add(user, msg, thread_id)
+        await db.tguser.add(user, msg)
         new_user = True
 
     await save_user_message(msg, new_user=new_user, stat=False)
@@ -46,42 +46,6 @@ async def _group_hello(msg: agtypes.Message):
     if not group.is_forum:
         text += '\n\n❗ Please enable topics in the group settings. This will also change its ID.'
     await msg.bot.send_message(group.id, text)
-
-
-async def _new_topic(msg: agtypes.Message, tguser=None) -> int:
-    """
-    Create a new topic for the user
-    """
-    group_id = msg.bot.cfg['admin_group_id']
-    user, bot = msg.chat, msg.bot
-
-    response = await bot.create_forum_topic(group_id, user.full_name)
-    thread_id = response.message_thread_id
-
-    text = await make_user_info(user, bot=bot, tguser=tguser)
-    text += '\n\n<i>Replies to any bot message in this topic will be sent to the user</i>'
-
-    await bot.send_message(group_id, text, message_thread_id=thread_id)
-    await _send_quick_replies(bot, thread_id)
-    return thread_id
-
-
-async def _send_quick_replies(bot, thread_id: int) -> None:
-    """
-    Drop a quick-reply keyboard into the topic if configured
-    """
-
-    if not bot.admin_quick_replies:
-        return
-
-    text = '⚡ Быстрые ответы для оператора'
-    await send_new_msg_with_keyboard(
-        bot,
-        bot.cfg['admin_group_id'],
-        text,
-        bot.admin_quick_replies,
-        message_thread_id=thread_id,
-    )
 
 
 @log
@@ -219,26 +183,6 @@ async def admin_quick_reply_handler(call: agtypes.CallbackQuery, *args, **kwargs
     await save_for_destruction(sent_to_user, bot, chat_id=tguser.user_id)
     return await call.answer('Сообщение отправлено')
 
-
-@log
-@handle_error
-async def show_quick_replies(msg: agtypes.Message, *args, **kwargs):
-    """
-    Show quick replies in the current admin topic
-    """
-    bot = msg.bot
-
-    if not bot.admin_quick_replies:
-        return await msg.answer('⚠️ Быстрые ответы не настроены (admin_replies.toml)')
-
-    text = '⚡ Быстрые ответы для оператора'
-    await send_new_msg_with_keyboard(
-        bot,
-        msg.chat.id,
-        text,
-        bot.admin_quick_replies,
-        message_thread_id=msg.message_thread_id,
-    )
 
 
 def register_handlers(dp: Dispatcher) -> None:

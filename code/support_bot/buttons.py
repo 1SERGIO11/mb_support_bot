@@ -8,13 +8,12 @@ import aiogram.types as agtypes
 import toml
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters.callback_data import CallbackData
-from aiogram.types import InlineKeyboardButton
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from .admin_actions import admin_broadcast_start, del_old_topics
 from .const import MSG_TEXT_LIMIT, AdminBtn, ButtonMode, MenuMode
 from .informing import handle_error, log
-from .utils import save_for_destruction
+from .utils import save_for_destruction, CBD, _create_button, _extract_answer, _get_kb_builder, \
+    send_new_msg_with_keyboard
 
 
 def load_toml(path: Path) -> dict | None:
@@ -24,95 +23,6 @@ def load_toml(path: Path) -> dict | None:
     if path.is_file():
         with open(path) as f:
             return toml.load(f)
-
-
-class CBD(CallbackData, prefix='_'):
-    """
-    Callback Data
-    """
-    path: str  # separated inside by '.'
-    code: str  # button identifier after the path
-    msgid: int  # id of a message with this button
-
-
-class Button:
-    """
-    Wrapper over an inline keyboard button
-    """
-    def __init__(self, content):
-        self.content = content
-        self._recognize_mode()
-
-        empty_answer_allowed = self.mode in (ButtonMode.link, ButtonMode.file)
-        self.answer = _extract_answer(content, empty=empty_answer_allowed)
-
-    def _recognize_mode(self) -> None:
-        if 'link' in self.content:
-            self.mode = ButtonMode.link
-        elif 'file' in self.content:
-            self.mode = ButtonMode.file
-        elif any([isinstance(v, dict) and 'label' in v for v in self.content.values()]):
-            self.mode = ButtonMode.menu
-        elif 'subject' in self.content:
-            self.mode = ButtonMode.subject
-        elif 'answer' in self.content:
-            self.mode = ButtonMode.answer
-
-    def as_inline(self, callback_data : str | None=None) -> InlineKeyboardButton:
-        if self.mode in (ButtonMode.file, ButtonMode.answer, ButtonMode.menu, ButtonMode.subject):
-            return InlineKeyboardButton(text=self.content['label'], callback_data=callback_data)
-        elif self.mode == ButtonMode.link:
-            return InlineKeyboardButton(text=self.content['label'], url=self.content['link'])
-        raise ValueError('Unexpected button mode')
-
-
-def _extract_answer(menu: dict, empty: bool=False) -> str:
-    answer = (menu.get('answer') or '')[:MSG_TEXT_LIMIT]
-    if not empty:
-        answer = answer or '👀'
-    return answer
-
-
-def _create_button(content):
-    """
-    Button factory
-    """
-    if 'label' in content:
-        return Button(content)
-
-
-def _get_kb_builder(menu: dict, msgid: int, path: str='') -> InlineKeyboardBuilder:
-    """
-    Construct an InlineKeyboardBuilder object based on a given menu structure.
-    Args:
-        menu (dict): A dict with menu items to display.
-        msgid (int): message_id to place into callback data.
-        path (str, optional): A path to remember in callback data,
-            to be able to find an answer for a menu item.
-    """
-    builder = InlineKeyboardBuilder()
-
-    for key, val in menu.items():
-        if btn := _create_button(val):
-            cbd = CBD(path=path, code=key, msgid=msgid).pack()
-            if menu.get('menumode') == MenuMode.row:
-                builder.button(text=btn.content['label'], callback_data=cbd)
-            else:
-                builder.row(btn.as_inline(cbd))
-
-    if path:  # build bottom row with navigation
-        btns = []
-        cbd = CBD(path='', code='', msgid=msgid).pack()
-        btns.append(InlineKeyboardButton(text='🏠', callback_data=cbd))
-
-        if '.' in path:
-            spl = path.split('.')
-            cbd = CBD(path='.'.join(spl[:-2]), code=spl[-2], msgid=msgid).pack()
-            btns.append(InlineKeyboardButton(text='←', callback_data=cbd))
-
-        builder.row(*btns)
-
-    return builder
 
 
 def _find_menu_item(menu: dict, cbd: CallbackData) -> [dict, str]:
@@ -247,30 +157,6 @@ async def edit_or_send_new_msg_with_keyboard(
         return await send_new_msg_with_keyboard(
             bot, chat_id, text, menu, path, message_thread_id=message_thread_id,
         )
-
-
-async def send_new_msg_with_keyboard(
-        bot, chat_id: int, text: str, menu: dict | None, path: str='',
-        message_thread_id: int | None = None) -> agtypes.Message:
-    """
-    Shortcut to send a message with a keyboard.
-    """
-    sentmsg = await bot.send_message(
-        chat_id,
-        text=text,
-        disable_web_page_preview=True,
-        message_thread_id=message_thread_id,
-    )
-    if menu:
-        markup = _get_kb_builder(menu, sentmsg.message_id, path).as_markup()
-        await bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=sentmsg.message_id,
-            text=text,
-            reply_markup=markup,
-            disable_web_page_preview=True,
-        )
-    return sentmsg
 
 
 def build_confirm_menu(yes_answer: str='Confirmed', no_answer: str='Canceled') -> dict:
