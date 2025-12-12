@@ -9,6 +9,8 @@ The following variables are available in `.env` file:
 - `{BOTNAME}_FIRST_REPLY` - Optional. Text of an automatic reply to the first meaningful user mesasge (not the /start) sent to the bot.
 - `{BOTNAME}_CONTACT_GATE_MSG` - Optional. A hint shown if the user tries to write before pressing the “contact” button. Messages are forwarded to admins **only after** the user taps a button with `start_chat = true` in `menu.toml`.
 - `{BOTNAME}_CONTACT_UNLOCKED_MSG` - Optional. A prompt sent right after the user presses the contact button to confirm that messaging is unlocked and to remind what details to include (by default asks про ОС, приложение, сервер и регион/оператора).
+- `{BOTNAME}_STATS_TOPIC_NAME` - Optional. Name for the weekly stats topic (defaults to “Еженедельная статистика”). If no ID is provided the topic is created automatically and reused.
+- `{BOTNAME}_STATS_TOPIC_ID` - Optional. If you already have a dedicated stats topic in the admin group, put its `message_thread_id` here to reuse it; otherwise the bot will create one once and cache the ID in `shared/{BOTNAME}/stats_topic_id.txt`.
 - `{BOTNAME}_DB_URL` - Optional. Database URL if you want to use something other than SQLite in `shared/`.
 - `{BOTNAME}_DB_ENGINE` - Optional. Database library to use. Only `aiosqlite` is currently supported.
 - `{BOTNAME}_SAVE_MESSAGES_GSHEETS_CRED_FILE` - Optional. Google Service Account credentials file. If set, all the income and outcome bot messages are being saved to Google Sheets. See the setup steps in "How To" below.
@@ -80,6 +82,13 @@ answer = "Мы получили ваше сообщение и отвечаем 
 1. Specify the name of the JSON file in `.env` file in `{BOTNAME}_SAVE_MESSAGES_GSHEETS_CRED_FILE` variable. Example: `MYBOT_SAVE_MESSAGES_GSHEETS_CRED_FILE=mybot-ga-api-ce213a7201e5.json`
 1. Specify the name of your shared spreadsheet file in `.env` file in `{BOTNAME}_SAVE_MESSAGES_GSHEETS_FILENAME` variable. Example: `MYBOT_SAVE_MESSAGES_GSHEETS_FILENAME=Mybot archive`.
 1. Restart the bot to re-read `.env`
+
+### ... receive weekly stats in a dedicated admin topic
+
+1. Make sure the admin group has topics enabled and the bot is an admin with “Manage topics”.
+1. Option A: let the bot create the topic automatically — do nothing, the first weekly report will create `shared/{BOTNAME}/stats_topic_id.txt` and reuse it later.
+1. Option B: if you already have a topic for stats, take its `message_thread_id` and set `{BOTNAME}_STATS_TOPIC_ID=...` in `.env` (or rename via `{BOTNAME}_STATS_TOPIC_NAME`).
+1. Restart the bot after changing `.env`. Weekly reports (7-day + lifetime totals) arrive every Sunday to that topic.
 
 ## Hacking
 
