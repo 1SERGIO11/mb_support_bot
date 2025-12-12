@@ -232,42 +232,38 @@ async def admin_quick_reply_handler(call: agtypes.CallbackQuery, *args, **kwargs
     return await call.answer('Сообщение отправлено')
 
 
-@log
-@handle_error
-async def admin_message_edit(msg: agtypes.Message, *args, **kwargs) -> None:
-    """Mirror edits from admin topics to the user's chat."""
+async def _mirror_update_from_admin(bot, admin_msg: agtypes.Message, mapping) -> bool:
+    """Try to push the admin edit to the user; fallback to re-copy if needed.
 
-    bot, db = msg.bot, msg.bot.db
-    mapping = await db.msgmirror.get(msg.chat.id, msg.message_id)
-    if not mapping:
-        return
+    Returns True on success, False if nothing was updated.
+    """
 
     try:
-        if msg.text is not None:
+        if admin_msg.text is not None:
             await bot.edit_message_text(
-                msg.text,
+                admin_msg.text,
                 mapping.user_chat_id,
                 mapping.user_msg_id,
-                entities=msg.entities,
+                entities=admin_msg.entities,
                 parse_mode=None,
             )
-            return
-        if msg.caption is not None:
+            return True
+        if admin_msg.caption is not None:
             await bot.edit_message_caption(
                 mapping.user_chat_id,
                 mapping.user_msg_id,
-                caption=msg.caption,
-                caption_entities=msg.caption_entities,
+                caption=admin_msg.caption,
+                caption_entities=admin_msg.caption_entities,
                 parse_mode=None,
             )
-            return
+            return True
     except TelegramBadRequest:
         # Если сообщение у пользователя не редактируется (например, Telegram не даёт
         # изменить скопированное сообщение), заменим его новой копией и обновим
         # зеркальную связку, чтобы дальнейшие правки продолжали работать.
         try:
-            new_copy = await msg.copy_to(mapping.user_chat_id)
-            await db.msgmirror.add(
+            new_copy = await admin_msg.copy_to(mapping.user_chat_id)
+            await bot.db.msgmirror.add(
                 admin_chat_id=mapping.admin_chat_id,
                 admin_msg_id=mapping.admin_msg_id,
                 user_chat_id=mapping.user_chat_id,
@@ -278,8 +274,49 @@ async def admin_message_edit(msg: agtypes.Message, *args, **kwargs) -> None:
                 await bot.delete_message(mapping.user_chat_id, mapping.user_msg_id)
             except TelegramBadRequest:
                 pass
+            return True
         except TelegramBadRequest:
-            pass
+            return False
+
+    return False
+
+
+@log
+@handle_error
+async def admin_message_edit(msg: agtypes.Message, *args, **kwargs) -> None:
+    """Mirror edits from admin topics to the user's chat."""
+
+    bot, db = msg.bot, msg.bot.db
+    mapping = await db.msgmirror.get(msg.chat.id, msg.message_id)
+    if not mapping:
+        return
+
+    await _mirror_update_from_admin(bot, msg, mapping)
+
+
+@log
+@handle_error
+async def admin_sync_message(msg: agtypes.Message, *args, **kwargs) -> None:
+    """Force-sync a reply to the user if автозеркало не сработало (команда).
+
+    Использование: ответьте на нужное сообщение и отправьте /sync или /resend.
+    Бот попытается отредактировать копию у пользователя или пересоздать её.
+    """
+
+    if not msg.reply_to_message:
+        return await msg.answer('Ответьте на сообщение, которое нужно синхронизировать')
+
+    bot, db = msg.bot, msg.bot.db
+    mapping = await db.msgmirror.get(msg.chat.id, msg.reply_to_message.message_id)
+    if not mapping:
+        return await msg.answer('Не нашёл связь с сообщением пользователя')
+
+    updated = await _mirror_update_from_admin(bot, msg.reply_to_message, mapping)
+
+    if updated:
+        await msg.answer('✅ Сообщение обновлено у пользователя')
+    else:
+        await msg.answer('⚠️ Не удалось обновить сообщение у пользователя')
 
 
 @log
@@ -359,6 +396,15 @@ def register_handlers(dp: Dispatcher) -> None:
 
     dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
     dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
     dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
