@@ -489,6 +489,18 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
     dp.message.register(added_to_group, NewChatMembersFilter())
     dp.message.register(group_chat_created, GroupChatCreatedFilter())
     dp.message.register(mention_in_admin_group, BotMention(), InAdminGroup())
