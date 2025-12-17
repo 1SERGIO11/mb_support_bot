@@ -106,24 +106,80 @@ async def save_user_message(
         await bot.db.action.add(ActionName.new_user)
 
 
-async def stats_to_admin_chat(bots: list) -> None:
+def _format_admin_rows(rows: list) -> str:
+    if not rows:
+        return '—'
+
+    lines = []
+    for _, name, replies, edits, deletes in rows:
+        parts = [f"✉️ {replies or 0}"]
+        if edits:
+            parts.append(f"✏️ {edits}")
+        if deletes:
+            parts.append(f"🗑️ {deletes}")
+        lines.append(f"• <b>{name}</b> — " + ', '.join(parts))
+    return '\n'.join(lines)
+
+
+async def build_stats_report(bot, from_date: datetime.date, to_date: datetime.date | None = None, title: str = '') -> str:
+    to_date = to_date or datetime.date.today()
+    header = f"<b>{title}</b> ({from_date} — {to_date})" if title else f"Статистика {from_date} — {to_date}"
+
+    actions = await bot.db.action.get_grouped(from_date, to_date)
+    action_map = {row[0]: row[1] for row in actions}
+
+    admin_rows = await bot.db.adminstats.get_range(from_date, to_date)
+    total_replies = sum(row[2] or 0 for row in admin_rows)
+    total_edits = sum(row[3] or 0 for row in admin_rows)
+    total_deletes = sum(row[4] or 0 for row in admin_rows)
+
+    msg = [header]
+    msg.append('\n<b>Пользователи</b>')
+    msg.append(f"• Новых: {action_map.get(ActionName.new_user, 0) or 0}")
+    msg.append(f"• Сообщений: {action_map.get(ActionName.user_message, 0) or 0}")
+
+    msg.append('\n<b>Админы</b>')
+    totals = [f"✉️ {total_replies}"]
+    if total_edits:
+        totals.append(f"✏️ {total_edits}")
+    if total_deletes:
+        totals.append(f"🗑️ {total_deletes}")
+    msg.append('Всего: ' + ', '.join(totals))
+    msg.append(_format_admin_rows(admin_rows))
+
+    msg.append('\n<b>Системные метки</b>')
+    msg.append('#stats')
+
+    return '\n'.join(msg)
+
+
+async def stats_to_admin_chat(bots: list, period: str = 'week') -> None:
+    """Отправить статистику в закреплённый топик "Статистика" за нужный период.
+
+    period: 'week' | 'month' | 'lifetime'
     """
-    Report bot stats in admin group
-    """
-    from_date = datetime.date.today() - datetime.timedelta(days=7)
+
+    today = datetime.date.today()
+
+    if period == 'month':
+        from_date = today.replace(day=1)
+        title = 'Статистика за месяц'
+    elif period == 'lifetime':
+        from_date = datetime.date(1970, 1, 1)
+        title = 'Всего за всё время'
+    else:  # week
+        from_date = today - datetime.timedelta(days=6)
+        title = 'Статистика за неделю'
 
     for bot in bots:
-        msg = '<b>In the past week</b>\n'
-        if results := await bot.db.action.get_grouped(from_date):
-            msg += '\n'.join([f'- {r[0].value[1]}s: {r[1]}' for r in results]) + '\n'
-        else:
-            msg += '- Nothing\n'
+        thread_id = await bot.ensure_stats_topic()
+        main_msg = await build_stats_report(bot, from_date, title=title)
+        lifetime_msg = ''
+        if period != 'lifetime':
+            lifetime_msg = '\n\n' + await build_stats_report(bot, datetime.date(1970, 1, 1), title='Всего за всё время')
 
-        msg += '\n<b>From the beginning</b>\n'
-        if results := await bot.db.action.get_total():
-            msg += '\n'.join([f'- {r[0].value[1]}s: {r[1]}' for r in results]) + '\n'
-        else:
-            msg += '- Nothing yet\n'
-
-        msg += '\n#stats'
-        await bot.send_message(bot.cfg['admin_group_id'], msg)
+        await bot.send_message(
+            bot.cfg['admin_group_id'],
+            f"{main_msg}{lifetime_msg}",
+            message_thread_id=thread_id,
+        )
