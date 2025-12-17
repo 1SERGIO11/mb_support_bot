@@ -99,7 +99,8 @@ def cmd_migrate() -> None:
 
 async def start_jobs(bots: list) -> None:
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(stats_to_admin_chat, 'cron', day_of_week=0, args=(bots,))  # weekly
+    scheduler.add_job(stats_to_admin_chat, 'cron', day_of_week=0, hour=0, minute=5, args=(bots, 'week'))  # weekly (Sun night)
+    scheduler.add_job(stats_to_admin_chat, 'cron', day='last', hour=0, minute=10, args=(bots, 'month'))  # monthly (last day)
     scheduler.add_job(destruct_messages, 'interval', minutes=10, args=(bots,))  # every 10 minutes
     scheduler.start()
 
