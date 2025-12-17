@@ -12,7 +12,7 @@ from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 from gspread.utils import ValueInputOption
 
 from .const import MsgType
-from .utils import determine_msg_type, make_short_user_info
+from .common_utils import determine_msg_type, make_short_user_info
 
 
 CLIENT = None
