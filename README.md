@@ -13,7 +13,7 @@ Features:
 - Admins can broadcast a message to all the users directly from the admin group
 - Optional quick-reply keyboard for admins inside topics (configure `admin_replies.toml`)
 - Optional archiving of all the messages to a Google Sheet
-- Reporting of bot statistics once a week in a dedicated admin topic (auto-created or reuse existing) + on-demand `/stats` / `/stats_today`, with per-admin counters
+- Reporting of bot statistics in a dedicated admin topic (auto-created or reuse existing): weekly + monthly auto-posts, and on-demand `/stats`, `/stats_today`, `/stats_month`, with per-admin counters
 
 ![Alt text](media/menu_screenshot.png?raw=true "Menu screenshot")
 

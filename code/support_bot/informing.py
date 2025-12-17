@@ -153,17 +153,33 @@ async def build_stats_report(bot, from_date: datetime.date, to_date: datetime.da
     return '\n'.join(msg)
 
 
-async def stats_to_admin_chat(bots: list) -> None:
-    """Отправить еженедельную статистику в закреплённый топик "Статистика"."""
+async def stats_to_admin_chat(bots: list, period: str = 'week') -> None:
+    """Отправить статистику в закреплённый топик "Статистика" за нужный период.
 
-    from_date = datetime.date.today() - datetime.timedelta(days=7)
+    period: 'week' | 'month' | 'lifetime'
+    """
+
+    today = datetime.date.today()
+
+    if period == 'month':
+        from_date = today.replace(day=1)
+        title = 'Статистика за месяц'
+    elif period == 'lifetime':
+        from_date = datetime.date(1970, 1, 1)
+        title = 'Всего за всё время'
+    else:  # week
+        from_date = today - datetime.timedelta(days=6)
+        title = 'Статистика за неделю'
 
     for bot in bots:
         thread_id = await bot.ensure_stats_topic()
-        week_msg = await build_stats_report(bot, from_date, title='Статистика за неделю')
-        lifetime_msg = await build_stats_report(bot, datetime.date(1970, 1, 1), title='Всего за всё время')
+        main_msg = await build_stats_report(bot, from_date, title=title)
+        lifetime_msg = ''
+        if period != 'lifetime':
+            lifetime_msg = '\n\n' + await build_stats_report(bot, datetime.date(1970, 1, 1), title='Всего за всё время')
+
         await bot.send_message(
             bot.cfg['admin_group_id'],
-            f"{week_msg}\n\n{lifetime_msg}",
+            f"{main_msg}{lifetime_msg}",
             message_thread_id=thread_id,
         )

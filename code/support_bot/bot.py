@@ -159,7 +159,7 @@ class SupportBot(Bot):
             return int(thread_id)
 
         response = await self.create_forum_topic(
-            self.cfg['admin_group_id'], self.cfg.get('stats_topic_name', 'Еженедельная статистика'),
+            self.cfg['admin_group_id'], self.cfg.get('stats_topic_name', 'Статистика'),
         )
         thread_id = response.message_thread_id
 

@@ -379,14 +379,20 @@ async def admin_stats_command(msg: agtypes.Message, *args, **kwargs) -> None:
     bot = msg.bot
     text = msg.text or ''
     if 'today' in text:
-        days = 1
+        from_date = datetime.date.today()
         title = 'Статистика за сегодня'
+    elif 'month' in text:
+        from_date = datetime.date.today().replace(day=1)
+        title = 'Статистика за месяц'
     else:
-        days = 7
+        from_date = datetime.date.today() - datetime.timedelta(days=6)
         title = 'Статистика за неделю'
 
-    from_date = datetime.date.today() - datetime.timedelta(days=days - 1)
-    thread_id = await bot.ensure_stats_topic()
+    stats_thread = bot.cfg.get('stats_topic_id')
+    if msg.message_thread_id and stats_thread and int(stats_thread) == msg.message_thread_id:
+        thread_id = msg.message_thread_id
+    else:
+        thread_id = await bot.ensure_stats_topic()
     report = await build_stats_report(bot, from_date, title=title)
     await bot.send_message(bot.cfg['admin_group_id'], report, message_thread_id=thread_id)
 
@@ -469,6 +475,18 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
     dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
     dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
     dp.message.register(added_to_group, NewChatMembersFilter())
