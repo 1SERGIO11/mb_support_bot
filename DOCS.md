@@ -5,11 +5,11 @@ The following variables are available in `.env` file:
 - `{BOTNAME}_TOKEN` - Bot's secret token.
 - `{BOTNAME}_ADMIN_GROUP_ID` - ID of a Telegram group, where the bot should forward messages from users. Example: `-1002014482535`. The group must have the "Topics" enabled, and the bot has to be an admin with 'Manage topics' permission.
 - `{BOTNAME}_HELLO_MSG` - Optional. A welcome message to a new user. This and other messages (`{BOTNAME}_HELLO_PS`, `{BOTNAME}_FIRST_REPLY`) can use all the HTML tags supported by Telegram for styling: see *Styling messages* section below.
-- `{BOTNAME}_HELLO_PS` - Optional. A P.S. in hello message. Default is "The bot is created by @moladzbel".
+- `{BOTNAME}_HELLO_PS` - Optional. A P.S. in hello message. Default is empty (no подпись).
 - `{BOTNAME}_FIRST_REPLY` - Optional. Text of an automatic reply to the first meaningful user mesasge (not the /start) sent to the bot.
 - `{BOTNAME}_CONTACT_GATE_MSG` - Optional. A hint shown if the user tries to write before pressing the “contact” button. Messages are forwarded to admins **only after** the user taps a button with `start_chat = true` in `menu.toml`.
 - `{BOTNAME}_CONTACT_UNLOCKED_MSG` - Optional. A prompt sent right after the user presses the contact button to confirm that messaging is unlocked and to remind what details to include (by default asks про ОС, приложение, сервер и регион/оператора).
-- `{BOTNAME}_STATS_TOPIC_NAME` - Optional. Name for the weekly stats topic (defaults to “Еженедельная статистика”). If no ID is provided the topic is created automatically and reused.
+- `{BOTNAME}_STATS_TOPIC_NAME` - Optional. Name for the weekly stats topic (defaults to “Статистика”). If no ID is provided the topic is created automatically and reused.
 - `{BOTNAME}_STATS_TOPIC_ID` - Optional. If you already have a dedicated stats topic in the admin group, put its `message_thread_id` here to reuse it; otherwise the bot will create one once and cache the ID in `shared/{BOTNAME}/stats_topic_id.txt`.
 - `{BOTNAME}_DB_URL` - Optional. Database URL if you want to use something other than SQLite in `shared/`.
 - `{BOTNAME}_DB_ENGINE` - Optional. Database library to use. Only `aiosqlite` is currently supported.
@@ -42,6 +42,15 @@ If you want to unlock forwarding to admins only after a user taps a specific but
 - Сообщения, начинающиеся с `/` (например, `/ внутренний комментарий`), считаются внутренними и не уходят пользователю.
 - Редактирование текста или подписи админ-сообщения правит копию у пользователя. Если что-то не применилось, ответьте на сообщение и отправьте `/sync` или `/resend` — бот обновит копию у пользователя или пересоздаст её.
 - Удаление — командой `/del` или `/delete`, отправленной **в ответ** на сообщение, которое нужно убрать у пользователя. Бот удаляет копию у пользователя, исходник в админ-топике и пытается убрать саму команду.
+
+### Статистика
+- Раз в неделю бот публикует отчёт в топик `Статистика` (создаётся автоматически или задаётся через `{BOTNAME}_STATS_TOPIC_ID`). Внутри — срез за 7 дней и итоги за всё время: сколько новых пользователей, сколько сообщений, кто из админов сколько ответил/редактировал/удалил.
+- Вручную вызвать отчёты можно командами в админ-группе:
+  - `/stats` или `/stats_week` — за 7 дней
+  - `/stats_today` — за текущий день
+
+### Блокировка пользователей
+- В админ-треде ответьте на сообщение и отправьте `/ban` — пользователь помечается как заблокированный, новые сообщения не пересылаются в админку.
 
 ### Quick replies for admins
 

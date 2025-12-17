@@ -62,7 +62,7 @@ class SupportBot(Bot):
             ),
             'db_url': f'sqlite+aiosqlite:///{self.botdir}/db.sqlite',
             'db_engine': 'aiosqlite',
-            'hello_ps': '\n\n<i>The bot is created by @moladzbel</i>',
+            'hello_ps': '',
             'contact_gate_msg': (
                 '✉️ Чтобы обратиться в поддержку, нажмите кнопку «Написать оператору» в меню ниже. '
                 'Сообщения попадут к оператору только после нажатия.'
@@ -76,7 +76,7 @@ class SupportBot(Bot):
                 '4. Регион и оператора\n\n'
                 'Это поможет быстрее разобраться и решить вашу проблему.'
             ),
-            'stats_topic_name': 'Еженедельная статистика',
+            'stats_topic_name': 'Статистика',
         }
         stats_file = self.botdir / 'stats_topic_id.txt'
         if stats_file.exists():

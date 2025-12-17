@@ -45,6 +45,22 @@ class ActionStats(Base):
     )
 
 
+class AdminStats(Base):
+    __tablename__ = 'adminstats'
+
+    id = sa.Column(sa.Integer, primary_key=True)
+    admin_id = sa.Column(sa.Integer, nullable=False)
+    admin_name = sa.Column(sa.String(128), nullable=False)
+    date = sa.Column(sa.Date, nullable=False)
+    replies = sa.Column(sa.Integer, default=0)
+    edits = sa.Column(sa.Integer, default=0)
+    deletes = sa.Column(sa.Integer, default=0)
+
+    __table_args__ = (
+        sa.UniqueConstraint('admin_id', 'date'),
+    )
+
+
 class MessagesToDelete(Base):
     __tablename__ = 'messages_to_delete'
 
@@ -100,6 +116,7 @@ class SqlDb:
         self.action = SqlAction(url)
         self.msgtodel = SqlMessageToDelete(url)
         self.msgmirror = SqlMirroredMessages(url)
+        self.adminstats = SqlAdminStats(url)
 
 
 class SqlRepo:
@@ -227,14 +244,16 @@ class SqlAction(SqlRepo):
             except IntegrityError:
                 await conn.execute(update_q)
 
-    async def get_grouped(self, from_date: datetime.date) -> list:
+    async def get_grouped(self, from_date: datetime.date, to_date: datetime.date | None = None) -> list:
         """
-        Statistics over time starting from "from_date"
+        Statistics over time between from_date and to_date (inclusive)
         """
+        to_date = to_date or datetime.date.today()
         async with create_async_engine(self.url).begin() as conn:
             query = (
                 sa.select(ActionStats.name, sa.func.sum(ActionStats.count))
                 .where(ActionStats.date >= from_date)
+                .where(ActionStats.date <= to_date)
                 .group_by(ActionStats.name)
             )
             result = await conn.execute(query)
@@ -377,3 +396,63 @@ class SqlMirroredMessages(SqlRepo):
             async with create_async_engine(self.url).begin() as conn:
                 query = sa.delete(MessagesToDelete).filter(MessagesToDelete.id.in_(ids))
                 await conn.execute(query)
+
+
+class SqlAdminStats(SqlRepo):
+    """Repository for per-admin stats (replies/edits/deletes)."""
+
+    def __init__(self, url: str):
+        super().__init__(url)
+        self._ensured = False
+
+    async def _ensure_table(self) -> None:
+        if self._ensured:
+            return
+        async with create_async_engine(self.url).begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        self._ensured = True
+
+    async def bump(self, admin_id: int, admin_name: str, field: str) -> None:
+        await self._ensure_table()
+        today = datetime.date.today()
+        field = field.lower()
+        if field not in {'replies', 'edits', 'deletes'}:
+            return
+
+        async with create_async_engine(self.url).begin() as conn:
+            vals = {
+                'admin_id': admin_id,
+                'admin_name': admin_name or '—',
+                'date': today,
+                field: 1,
+            }
+            insert_q = sa.insert(AdminStats).values(vals)
+            update_q = (
+                sa.update(AdminStats)
+                .where((AdminStats.admin_id == vals['admin_id']) & (AdminStats.date == vals['date']))
+                .values(**{field: getattr(AdminStats, field) + 1, 'admin_name': vals['admin_name']})
+            )
+            try:
+                await conn.execute(insert_q)
+            except IntegrityError:
+                await conn.execute(update_q)
+
+    async def get_range(self, from_date: datetime.date, to_date: datetime.date | None = None) -> list[SaRow]:
+        await self._ensure_table()
+        to_date = to_date or datetime.date.today()
+        async with create_async_engine(self.url).begin() as conn:
+            query = (
+                sa.select(
+                    AdminStats.admin_id,
+                    AdminStats.admin_name,
+                    sa.func.sum(AdminStats.replies),
+                    sa.func.sum(AdminStats.edits),
+                    sa.func.sum(AdminStats.deletes),
+                )
+                .where(AdminStats.date >= from_date)
+                .where(AdminStats.date <= to_date)
+                .group_by(AdminStats.admin_id, AdminStats.admin_name)
+                .order_by(sa.desc(sa.func.sum(AdminStats.replies)))
+            )
+            result = await conn.execute(query)
+            return result.fetchall()

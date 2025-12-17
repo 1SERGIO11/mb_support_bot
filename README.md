@@ -8,12 +8,12 @@ Features:
 - Simple bot menu builder using `toml` file
 - Menu answers stay in one message by default (keyboard remains pinned)
 - Forwarding to admins is unlocked only after the user taps the “contact” button (no accidental submissions)
-- Admin messages in topics auto-forward to the user (no need to reply); edits are mirrored; при сбое можно пересинхронизировать командой `/sync` (reply). Удаление — командой `/del` или `/delete` в ответ на сообщение
+- Admin messages in topics auto-forward to the user (no need to reply); edits are mirrored; при сбое можно пересинхронизировать командой `/sync` (reply). Удаление — командой `/del` или `/delete` в ответ на сообщение. `/ban` блокирует пользователя в текущем треде
 - Optional message self-destruction on the user's side, triggered by a timer
 - Admins can broadcast a message to all the users directly from the admin group
 - Optional quick-reply keyboard for admins inside topics (configure `admin_replies.toml`)
 - Optional archiving of all the messages to a Google Sheet
-- Reporting of bot statistics once a week in a dedicated admin topic (auto-created or reuse existing)
+- Reporting of bot statistics once a week in a dedicated admin topic (auto-created or reuse existing) + on-demand `/stats` / `/stats_today`, with per-admin counters
 
 ![Alt text](media/menu_screenshot.png?raw=true "Menu screenshot")
 

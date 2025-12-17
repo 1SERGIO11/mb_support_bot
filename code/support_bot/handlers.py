@@ -1,3 +1,5 @@
+import datetime
+
 import aiogram.types as agtypes
 from aiogram import Dispatcher
 from aiogram.exceptions import TelegramBadRequest
@@ -6,7 +8,13 @@ from aiogram.filters import Command
 from . import buttons
 from .admin_actions import BroadcastForm, admin_broadcast_ask_confirm, admin_broadcast_finish
 from .buttons import CBD, admin_btn_handler, send_new_msg_with_keyboard, user_btn_handler
-from .informing import handle_error, log, save_admin_message, save_user_message
+from .informing import (
+    build_stats_report,
+    handle_error,
+    log,
+    save_admin_message,
+    save_user_message,
+)
 from .filters import (
     ACommandFilter, BtnInAdminGroup, BtnInAdminTopic, BtnInPrivateChat, BotMention,
     InAdminGroup, InAdminTopic,
@@ -115,6 +123,12 @@ async def user_message(msg: agtypes.Message, *args, **kwargs) -> None:
     bot, user, db = msg.bot, msg.chat, msg.bot.db
 
     tguser = await db.tguser.get(user=user)
+
+    if tguser and getattr(tguser, 'banned', False):
+        await save_user_message(msg, new_user=False, stat=False)
+        await save_for_destruction(msg, bot)
+        return
+
     can_message = bool(tguser and getattr(tguser, 'can_message', False))
 
     if not can_message:
@@ -178,6 +192,7 @@ async def admin_message(msg: agtypes.Message, *args, **kwargs) -> None:
         return await msg.answer('Не нашёл пользователя для этой темы')
 
     copied = await msg.copy_to(tguser.user_id)
+    await db.adminstats.bump(msg.from_user.id, msg.from_user.full_name or msg.from_user.username, 'replies')
     await db.msgmirror.add(
         admin_chat_id=msg.chat.id,
         admin_msg_id=msg.message_id,
@@ -291,7 +306,8 @@ async def admin_message_edit(msg: agtypes.Message, *args, **kwargs) -> None:
     if not mapping:
         return
 
-    await _mirror_update_from_admin(bot, msg, mapping)
+    if await _mirror_update_from_admin(bot, msg, mapping):
+        await db.adminstats.bump(msg.from_user.id, msg.from_user.full_name or msg.from_user.username, 'edits')
 
 
 @log
@@ -346,6 +362,7 @@ async def admin_delete_message(msg: agtypes.Message, *args, **kwargs) -> None:
         pass
 
     await db.msgmirror.delete(msg.chat.id, msg.reply_to_message.message_id)
+    await db.adminstats.bump(msg.from_user.id, msg.from_user.full_name or msg.from_user.username, 'deletes')
 
     # Clean up the /del command itself
     try:
@@ -354,6 +371,41 @@ async def admin_delete_message(msg: agtypes.Message, *args, **kwargs) -> None:
         pass
 
 
+@log
+@handle_error
+async def admin_stats_command(msg: agtypes.Message, *args, **kwargs) -> None:
+    """Показать статистику за период (день или неделя) в стат-туре."""
+
+    bot = msg.bot
+    text = msg.text or ''
+    if 'today' in text:
+        days = 1
+        title = 'Статистика за сегодня'
+    else:
+        days = 7
+        title = 'Статистика за неделю'
+
+    from_date = datetime.date.today() - datetime.timedelta(days=days - 1)
+    thread_id = await bot.ensure_stats_topic()
+    report = await build_stats_report(bot, from_date, title=title)
+    await bot.send_message(bot.cfg['admin_group_id'], report, message_thread_id=thread_id)
+
+
+@log
+@handle_error
+async def admin_ban_user(msg: agtypes.Message, *args, **kwargs) -> None:
+    """Заблокировать пользователя в текущем топике (ответом на его сообщение)."""
+
+    if not msg.reply_to_message:
+        return await msg.answer('Ответьте на сообщение пользователя, которого нужно заблокировать')
+
+    bot = msg.bot
+    mapping = await bot.db.msgmirror.get(msg.chat.id, msg.reply_to_message.message_id)
+    if not mapping:
+        return await msg.answer('Не нашёл пользователя для этого сообщения')
+
+    await bot.db.tguser.update(mapping.user_chat_id, banned=True)
+    await msg.answer('🚫 Пользователь заблокирован, новые сообщения игнорируются')
 @log
 @handle_error
 async def show_quick_replies(msg: agtypes.Message, *args, **kwargs):
@@ -406,6 +458,17 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.edited_message.register(admin_message_edit, InAdminTopic())
     dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
     dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
     dp.message.register(added_to_group, NewChatMembersFilter())
