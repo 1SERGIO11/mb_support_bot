@@ -36,8 +36,7 @@ async def cmd_start(msg: agtypes.Message, *args, **kwargs) -> None:
 
     new_user = False
     if not await db.tguser.get(user=user):  # save user if it's new
-        thread_id = await _new_topic(msg)
-        await db.tguser.add(user, msg, thread_id)
+        await db.tguser.add(user, msg)
         new_user = True
 
     await save_user_message(msg, new_user=new_user, stat=False)
@@ -405,6 +404,91 @@ def register_handlers(dp: Dispatcher) -> None:
     """
     # Commands first so /start не перехватывается как обычное сообщение
     dp.message.register(cmd_start, PrivateChatFilter(), Command('start'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
     # Пользователи теперь могут писать со слешами — это не мешает операторам
     dp.message.register(user_message, PrivateChatFilter())
