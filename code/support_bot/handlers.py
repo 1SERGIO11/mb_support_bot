@@ -20,8 +20,8 @@ from .filters import (
     InAdminGroup, InAdminTopic,
     GroupChatCreatedFilter, NewChatMembersFilter, PrivateChatFilter,
 )
-from .informing import handle_error, log, save_admin_message, save_user_message
-from .utils import save_for_destruction, _new_topic, show_quick_replies
+from .topics import create_user_topic
+from .utils import save_for_destruction
 
 
 @log
@@ -53,42 +53,6 @@ async def _group_hello(msg: agtypes.Message):
     if not group.is_forum:
         text += '\n\n❗ Please enable topics in the group settings. This will also change its ID.'
     await msg.bot.send_message(group.id, text)
-
-
-async def _new_topic(msg: agtypes.Message, tguser=None) -> int:
-    """
-    Create a new topic for the user
-    """
-    group_id = msg.bot.cfg['admin_group_id']
-    user, bot = msg.chat, msg.bot
-
-    response = await bot.create_forum_topic(group_id, user.full_name)
-    thread_id = response.message_thread_id
-
-    text = await make_user_info(user, bot=bot, tguser=tguser)
-    text += '\n\n<i>Replies to any bot message in this topic will be sent to the user</i>'
-
-    await bot.send_message(group_id, text, message_thread_id=thread_id)
-    await _send_quick_replies(bot, thread_id)
-    return thread_id
-
-
-async def _send_quick_replies(bot, thread_id: int) -> None:
-    """
-    Drop a quick-reply keyboard into the topic if configured
-    """
-
-    if not bot.admin_quick_replies:
-        return
-
-    text = '⚡ Быстрые ответы для оператора'
-    await send_new_msg_with_keyboard(
-        bot,
-        bot.cfg['admin_group_id'],
-        text,
-        bot.admin_quick_replies,
-        message_thread_id=thread_id,
-    )
 
 
 @log
@@ -151,10 +115,10 @@ async def user_message(msg: agtypes.Message, *args, **kwargs) -> None:
                 await msg.forward(group_id, message_thread_id=thread_id)
             except TelegramBadRequest as exc:  # the topic vanished for whatever reason
                 if 'thread not found' in exc.message.lower():
-                    thread_id = await _new_topic(msg, tguser=tguser)
+                    thread_id = await create_user_topic(msg, tguser=tguser)
                     await msg.forward(group_id, message_thread_id=thread_id)
         else:
-            thread_id = await _new_topic(msg, tguser=tguser)
+            thread_id = await create_user_topic(msg, tguser=tguser)
             await msg.forward(group_id, message_thread_id=thread_id)
 
         if tguser.first_replied:
@@ -166,7 +130,7 @@ async def user_message(msg: agtypes.Message, *args, **kwargs) -> None:
             await db.tguser.update(user.id, user_msg=msg, thread_id=thread_id, first_replied=True)
 
     else:
-        thread_id = await _new_topic(msg)
+        thread_id = await create_user_topic(msg)
         if bot.cfg['first_reply']:
             sentmsg = await bot.send_message(user.id, bot.cfg['first_reply'])
             await save_for_destruction(sentmsg, bot)
@@ -475,6 +439,18 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
     dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
     dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
     # Пользователи теперь могут писать со слешами — это не мешает операторам

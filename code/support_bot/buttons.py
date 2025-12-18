@@ -12,8 +12,8 @@ from aiogram.filters.callback_data import CallbackData
 from .admin_actions import admin_broadcast_start, del_old_topics
 from .const import MSG_TEXT_LIMIT, AdminBtn, ButtonMode, MenuMode
 from .informing import handle_error, log
-from .utils import save_for_destruction, CBD, _create_button, _extract_answer, _get_kb_builder, \
-    send_new_msg_with_keyboard
+from .topics import create_user_topic
+from .utils import save_for_destruction
 
 
 def load_toml(path: Path) -> dict | None:
@@ -64,11 +64,13 @@ async def user_btn_handler(call: agtypes.CallbackQuery, *args, **kwargs):
         elif btn.mode == ButtonMode.answer:
             unlocked_prompt = None
             if menuitem.get('start_chat'):
-                if tguser := await bot.db.tguser.get(user=chat):
+                tguser = await bot.db.tguser.get(user=chat)
+                if tguser:
                     # Reset the flag so the user gets the first auto-reply again
                     await bot.db.tguser.update(chat.id, can_message=True, first_replied=False)
                 else:
-                    await bot.db.tguser.add(chat, msg, first_replied=False, can_message=True)
+                    tguser = await bot.db.tguser.add(chat, msg, first_replied=False, can_message=True)
+
                 unlocked_text = bot.cfg.get('contact_unlocked_msg')
                 if unlocked_text:
                     unlocked_prompt = await msg.answer(unlocked_text)
