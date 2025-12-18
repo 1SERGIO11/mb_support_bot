@@ -7,9 +7,11 @@ from pathlib import Path
 import aiogram.types as agtypes
 import toml
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters.callback_data import CallbackData
+from aiogram.types import InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from .admin_actions import admin_broadcast_start, del_old_topics
+from .callback_data import CBD
 from .const import MSG_TEXT_LIMIT, AdminBtn, ButtonMode, MenuMode
 from .informing import handle_error, log
 from .topics import create_user_topic
@@ -25,7 +27,87 @@ def load_toml(path: Path) -> dict | None:
             return toml.load(f)
 
 
-def _find_menu_item(menu: dict, cbd: CallbackData) -> [dict, str]:
+class Button:
+    """
+    Wrapper over an inline keyboard button
+    """
+    def __init__(self, content):
+        self.content = content
+        self._recognize_mode()
+
+        empty_answer_allowed = self.mode in (ButtonMode.link, ButtonMode.file)
+        self.answer = _extract_answer(content, empty=empty_answer_allowed)
+
+    def _recognize_mode(self) -> None:
+        if 'link' in self.content:
+            self.mode = ButtonMode.link
+        elif 'file' in self.content:
+            self.mode = ButtonMode.file
+        elif any([isinstance(v, dict) and 'label' in v for v in self.content.values()]):
+            self.mode = ButtonMode.menu
+        elif 'subject' in self.content:
+            self.mode = ButtonMode.subject
+        elif 'answer' in self.content:
+            self.mode = ButtonMode.answer
+
+    def as_inline(self, callback_data : str | None=None) -> InlineKeyboardButton:
+        if self.mode in (ButtonMode.file, ButtonMode.answer, ButtonMode.menu, ButtonMode.subject):
+            return InlineKeyboardButton(text=self.content['label'], callback_data=callback_data)
+        elif self.mode == ButtonMode.link:
+            return InlineKeyboardButton(text=self.content['label'], url=self.content['link'])
+        raise ValueError('Unexpected button mode')
+
+
+def _extract_answer(menu: dict, empty: bool=False) -> str:
+    answer = (menu.get('answer') or '')[:MSG_TEXT_LIMIT]
+    if not empty:
+        answer = answer or '👀'
+    return answer
+
+
+def _create_button(content):
+    """
+    Button factory
+    """
+    if 'label' in content:
+        return Button(content)
+
+
+def _get_kb_builder(menu: dict, msgid: int, path: str='') -> InlineKeyboardBuilder:
+    """
+    Construct an InlineKeyboardBuilder object based on a given menu structure.
+    Args:
+        menu (dict): A dict with menu items to display.
+        msgid (int): message_id to place into callback data.
+        path (str, optional): A path to remember in callback data,
+            to be able to find an answer for a menu item.
+    """
+    builder = InlineKeyboardBuilder()
+
+    for key, val in menu.items():
+        if btn := _create_button(val):
+            cbd = CBD(path=path, code=key, msgid=msgid).pack()
+            if menu.get('menumode') == MenuMode.row:
+                builder.button(text=btn.content['label'], callback_data=cbd)
+            else:
+                builder.row(btn.as_inline(cbd))
+
+    if path:  # build bottom row with navigation
+        btns = []
+        cbd = CBD(path='', code='', msgid=msgid).pack()
+        btns.append(InlineKeyboardButton(text='🏠', callback_data=cbd))
+
+        if '.' in path:
+            spl = path.split('.')
+            cbd = CBD(path='.'.join(spl[:-2]), code=spl[-2], msgid=msgid).pack()
+            btns.append(InlineKeyboardButton(text='←', callback_data=cbd))
+
+        builder.row(*btns)
+
+    return builder
+
+
+def _find_menu_item(menu: dict, cbd: CBD) -> [dict, str]:
     """
     Find a button info in bot menu tree by callback data.
     """
@@ -144,7 +226,7 @@ async def set_subject(bot, user: agtypes.User, menuitem: dict) -> agtypes.Messag
 
 
 async def edit_or_send_new_msg_with_keyboard(
-        bot, chat_id: int, cbd: CallbackData, menu: dict, path: str='',
+        bot, chat_id: int, cbd: CBD, menu: dict, path: str='',
         message_thread_id: int | None = None) -> agtypes.Message:
     """
     Shortcut to edit a message, or,
