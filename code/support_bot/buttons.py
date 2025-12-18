@@ -162,10 +162,6 @@ async def user_btn_handler(call: agtypes.CallbackQuery, *args, **kwargs):
                 else:
                     tguser = await bot.db.tguser.add(chat, msg, first_replied=False, can_message=True)
 
-                if not getattr(tguser, 'thread_id', None):
-                    thread_id = await create_user_topic(msg, tguser=tguser)
-                    await bot.db.tguser.update(chat.id, thread_id=thread_id)
-
                 unlocked_text = bot.cfg.get('contact_unlocked_msg')
                 if unlocked_text:
                     unlocked_prompt = await msg.answer(unlocked_text)
