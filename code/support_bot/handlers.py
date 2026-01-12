@@ -359,9 +359,9 @@ async def admin_stats_command(msg: agtypes.Message, *args, **kwargs) -> None:
     if msg.message_thread_id and stats_thread and int(stats_thread) == msg.message_thread_id:
         thread_id = msg.message_thread_id
     else:
-        thread_id = await bot.ensure_stats_topic()
+        thread_id = None
     report = await build_stats_report(bot, from_date, title=title)
-    await bot.send_message(bot.cfg['admin_group_id'], report, message_thread_id=thread_id)
+    await bot.send_to_stats_topic(report, message_thread_id=thread_id)
 
 
 @log
@@ -442,6 +442,18 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
     dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
     dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
 
     # Пользователи теперь могут писать со слешами — это не мешает операторам

@@ -5,6 +5,7 @@ from pathlib import Path
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from google.oauth2.service_account import Credentials
 
 from .buttons import load_toml
@@ -168,3 +169,18 @@ class SupportBot(Bot):
         self.cfg['stats_topic_id'] = thread_id
         await self.log(f'Created stats topic {thread_id} and saved to {path}')
         return thread_id
+
+    async def send_to_stats_topic(self, text: str, message_thread_id: int | None = None) -> int:
+        """Send a message to the stats topic, recreating it if the thread ID is invalid."""
+        thread_id = message_thread_id or await self.ensure_stats_topic()
+        try:
+            await self.send_message(self.cfg['admin_group_id'], text, message_thread_id=thread_id)
+            return thread_id
+        except TelegramBadRequest:
+            stats_file = self.botdir / 'stats_topic_id.txt'
+            if stats_file.exists():
+                stats_file.unlink()
+            self.cfg.pop('stats_topic_id', None)
+            thread_id = await self.ensure_stats_topic()
+            await self.send_message(self.cfg['admin_group_id'], text, message_thread_id=thread_id)
+            return thread_id

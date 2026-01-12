@@ -24,7 +24,9 @@ class GroupChatCreatedFilter(Filter):
 class ACommandFilter(Filter):
 
     async def __call__(self, msg: agtypes.Message) -> bool:
-        return str(getattr(msg, 'text', '')).startswith('/')
+        text = str(getattr(msg, 'text', '') or '')
+        caption = str(getattr(msg, 'caption', '') or '')
+        return text.startswith('/') or caption.startswith('/')
 
 
 class ReplyToBotInGroupForwardedFilter(Filter):

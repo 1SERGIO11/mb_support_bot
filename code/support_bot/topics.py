@@ -14,7 +14,6 @@ async def create_user_topic(msg: agtypes.Message, tguser=None) -> int:
     thread_id = response.message_thread_id
 
     text = await make_user_info(user, bot=bot, tguser=tguser)
-    text += '\n\n<i>Replies to any bot message in this topic will be sent to the user</i>'
 
     await bot.send_message(group_id, text, message_thread_id=thread_id)
 

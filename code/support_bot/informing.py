@@ -172,14 +172,9 @@ async def stats_to_admin_chat(bots: list, period: str = 'week') -> None:
         title = 'Статистика за неделю'
 
     for bot in bots:
-        thread_id = await bot.ensure_stats_topic()
         main_msg = await build_stats_report(bot, from_date, title=title)
         lifetime_msg = ''
         if period != 'lifetime':
             lifetime_msg = '\n\n' + await build_stats_report(bot, datetime.date(1970, 1, 1), title='Всего за всё время')
 
-        await bot.send_message(
-            bot.cfg['admin_group_id'],
-            f"{main_msg}{lifetime_msg}",
-            message_thread_id=thread_id,
-        )
+        await bot.send_to_stats_topic(f"{main_msg}{lifetime_msg}")
