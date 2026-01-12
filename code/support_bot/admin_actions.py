@@ -7,6 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.base import StorageKey
 
+from .callback_data import CBD
 from .const import AdminBtn
 from .informing import handle_error, log
 
@@ -89,8 +90,6 @@ async def admin_broadcast_finish(call: agtypes.CallbackQuery, state: FSMContext,
     """
     End of the broadcasting flow - send the message or forget it
     """
-    from .buttons import CBD
-
     msg = call.message
     bot = msg.bot
     cbd = CBD.unpack(call.data)
