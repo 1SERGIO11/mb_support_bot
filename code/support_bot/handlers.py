@@ -374,11 +374,18 @@ async def admin_ban_user(msg: agtypes.Message, *args, **kwargs) -> None:
         return await msg.answer('Ответьте на сообщение пользователя, которого нужно заблокировать')
 
     bot = msg.bot
+    user_chat_id = None
     mapping = await bot.db.msgmirror.get(msg.chat.id, msg.reply_to_message.message_id)
-    if not mapping:
+    if mapping:
+        user_chat_id = mapping.user_chat_id
+    elif msg.message_thread_id:
+        tguser = await bot.db.tguser.get(thread_id=msg.message_thread_id)
+        if tguser:
+            user_chat_id = tguser.user_id
+    if not user_chat_id:
         return await msg.answer('Не нашёл пользователя для этого сообщения')
 
-    await bot.db.tguser.update(mapping.user_chat_id, banned=True)
+    await bot.db.tguser.update(user_chat_id, banned=True)
     await msg.answer('🚫 Пользователь заблокирован, новые сообщения игнорируются')
 
 
@@ -391,11 +398,18 @@ async def admin_unban_user(msg: agtypes.Message, *args, **kwargs) -> None:
         return await msg.answer('Ответьте на сообщение пользователя, которого нужно разблокировать')
 
     bot = msg.bot
+    user_chat_id = None
     mapping = await bot.db.msgmirror.get(msg.chat.id, msg.reply_to_message.message_id)
-    if not mapping:
+    if mapping:
+        user_chat_id = mapping.user_chat_id
+    elif msg.message_thread_id:
+        tguser = await bot.db.tguser.get(thread_id=msg.message_thread_id)
+        if tguser:
+            user_chat_id = tguser.user_id
+    if not user_chat_id:
         return await msg.answer('Не нашёл пользователя для этого сообщения')
 
-    await bot.db.tguser.update(mapping.user_chat_id, banned=False)
+    await bot.db.tguser.update(user_chat_id, banned=False)
     await msg.answer('✅ Пользователь разблокирован, сообщения снова будут приниматься')
 @log
 @handle_error
