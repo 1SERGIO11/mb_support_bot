@@ -373,12 +373,43 @@ async def admin_ban_user(msg: agtypes.Message, *args, **kwargs) -> None:
         return await msg.answer('Ответьте на сообщение пользователя, которого нужно заблокировать')
 
     bot = msg.bot
+    user_chat_id = None
     mapping = await bot.db.msgmirror.get(msg.chat.id, msg.reply_to_message.message_id)
-    if not mapping:
+    if mapping:
+        user_chat_id = mapping.user_chat_id
+    elif msg.message_thread_id:
+        tguser = await bot.db.tguser.get(thread_id=msg.message_thread_id)
+        if tguser:
+            user_chat_id = tguser.user_id
+    if not user_chat_id:
         return await msg.answer('Не нашёл пользователя для этого сообщения')
 
-    await bot.db.tguser.update(mapping.user_chat_id, banned=True)
+    await bot.db.tguser.update(user_chat_id, banned=True)
     await msg.answer('🚫 Пользователь заблокирован, новые сообщения игнорируются')
+
+
+@log
+@handle_error
+async def admin_unban_user(msg: agtypes.Message, *args, **kwargs) -> None:
+    """Разблокировать пользователя в текущем топике (ответом на его сообщение)."""
+
+    if not msg.reply_to_message:
+        return await msg.answer('Ответьте на сообщение пользователя, которого нужно разблокировать')
+
+    bot = msg.bot
+    user_chat_id = None
+    mapping = await bot.db.msgmirror.get(msg.chat.id, msg.reply_to_message.message_id)
+    if mapping:
+        user_chat_id = mapping.user_chat_id
+    elif msg.message_thread_id:
+        tguser = await bot.db.tguser.get(thread_id=msg.message_thread_id)
+        if tguser:
+            user_chat_id = tguser.user_id
+    if not user_chat_id:
+        return await msg.answer('Не нашёл пользователя для этого сообщения')
+
+    await bot.db.tguser.update(user_chat_id, banned=False)
+    await msg.answer('✅ Пользователь разблокирован, сообщения снова будут приниматься')
 @log
 @handle_error
 async def show_quick_replies(msg: agtypes.Message, *args, **kwargs):
@@ -524,6 +555,19 @@ def register_handlers(dp: Dispatcher) -> None:
     dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
     dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
     dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
+    dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
+
+    # Пользователи теперь могут писать со слешами — это не мешает операторам
+    dp.message.register(user_message, PrivateChatFilter())
+
+    dp.message.register(admin_message, InAdminTopic(), ~ACommandFilter())
+    dp.edited_message.register(admin_message_edit, InAdminTopic())
+    dp.message.register(admin_sync_message, InAdminTopic(), Command('sync', 'resend'))
+    dp.message.register(admin_delete_message, InAdminTopic(), Command('del', 'delete'))
+    dp.message.register(admin_ban_user, InAdminTopic(), Command('ban'))
+    dp.message.register(admin_unban_user, InAdminTopic(), Command('unban'))
     dp.message.register(admin_stats_command, InAdminGroup(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
     dp.message.register(admin_stats_command, InAdminTopic(), Command('stats', 'stats_week', 'stats_today', 'stats_month'))
     dp.message.register(show_quick_replies, InAdminTopic(), Command('quick'))
